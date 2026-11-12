@@ -1,0 +1,16 @@
+{
+  "comment": "Single source of the virtual crew phrases. The generator script (tools/virtual-crew-voices) creates one audio file per voice and line. 'text' is what is spoken, written for the speech synthesiser.",
+  "voices": ["male", "female"],
+  "lines": {
+    "takeoff": { "text": "Takeoff." },
+    "thrustSet": { "text": "Thrust set." },
+    "oneHundredKnots": { "text": "One hundred knots." },
+    "v1": { "text": "Vee one." },
+    "rotate": { "text": "Rotate." },
+    "positiveClimb": { "text": "Positive climb." },
+    "gearUp": { "text": "Gear up." },
+    "flapsOne": { "text": "Flaps one." },
+    "flapsZero": { "text": "Flaps zero." },
+    "stop": { "text": "Stop!" }
+  }
+}

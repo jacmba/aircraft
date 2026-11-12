@@ -1,0 +1,26 @@
+{
+  "male": {
+    "takeoff": 1045,
+    "thrustSet": 1045,
+    "oneHundredKnots": 1614,
+    "v1": 987,
+    "rotate": 917,
+    "positiveClimb": 1440,
+    "gearUp": 789,
+    "flapsOne": 1231,
+    "flapsZero": 1289,
+    "stop": 1022
+  },
+  "female": {
+    "takeoff": 743,
+    "thrustSet": 998,
+    "oneHundredKnots": 1347,
+    "v1": 836,
+    "rotate": 1033,
+    "positiveClimb": 1149,
+    "gearUp": 650,
+    "flapsOne": 987,
+    "flapsZero": 1091,
+    "stop": 720
+  }
+}

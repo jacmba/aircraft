@@ -1,5 +1,5 @@
 // @ts-strict-ignore
-//  Copyright (c) 2024 FlyByWire Simulations
+//  Copyright (c) 2024-2026 FlyByWire Simulations
 //  SPDX-License-Identifier: GPL-3.0
 
 import { createContext } from 'react';
@@ -16,6 +16,8 @@ interface PushbackPage {
 }
 interface SettingsPages {
   autoCalloutsPage: React.ComponentType<any>;
+  /** Settings of the virtual crew, the settings tab is only shown if the aircraft provides it */
+  virtualCrewPage?: React.ComponentType<any>;
   audio: AudioOptions;
   pinProgram: PinProgramOptions;
   realism: RealismOptions;
