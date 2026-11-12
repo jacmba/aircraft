@@ -1,11 +1,12 @@
-// Copyright (c) 2022 FlyByWire Simulations
+// Copyright (c) 2022-2026 FlyByWire Simulations
 // SPDX-License-Identifier: GPL-3.0
 
 import { AircraftGithubVersionChecker } from '@flybywiresim/fbw-sdk';
-import { EventBus } from '@microsoft/msfs-sdk';
+import { EventBus, SimVarValueType } from '@microsoft/msfs-sdk';
 
 /**
- * This class is used to check the version of the aircraft and display a warning if it is too old.
+ * Version check of the aircraft. The check against GitHub is disabled for the A380X: local development builds would
+ * always be reported as outdated.
  */
 export class VersionCheck {
   constructor(
@@ -22,8 +23,9 @@ export class VersionCheck {
   public startPublish(): void {
     console.log('VersionCheck: startPublish()');
 
-    // TODO: Implement version check which is dependent on the API to change and handling
-    //  of github version for the monorepo needs to be changed.
-    console.warn('VersionCheck for the A380X is not yet implemented.');
+    // The flag is shared by all aircraft of the simulator session (e.g. set by a previously loaded A32NX), clear it so
+    // that the flyPad does not show "Outdated Aircraft Version".
+    SimVar.SetSimVarValue('L:A32NX_OUTDATED_VERSION', SimVarValueType.Bool, 0);
+    console.log('VersionCheck: disabled for the A380X');
   }
 }
