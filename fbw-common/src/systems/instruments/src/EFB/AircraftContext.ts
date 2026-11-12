@@ -66,6 +66,8 @@ interface ThrottleOptions {
 }
 interface AircraftEfbContext {
   performanceCalculators: PerformanceCalculators;
+  /** Page to interact with the virtual crew, the page and its toolbar button are only shown if provided */
+  crewPage?: React.ComponentType<any>;
   pushbackPage: PushbackPage;
   settingsPages: SettingsPages;
   /** File containing critical file hashes to be checked for integrity. */

@@ -19,7 +19,14 @@ export type VoiceLineId = keyof typeof voiceLines.lines;
 export type CrewInput = 'PRIMARY' | 'SECONDARY';
 
 /** Actions performed by the virtual pilot monitoring on the aircraft */
-export type CrewAction = { type: 'GEAR_UP' } | { type: 'FLAPS_SET'; index: number };
+export type CrewAction =
+  | { type: 'GEAR_UP' }
+  | { type: 'FLAPS_SET'; index: number }
+  /** Sets a local variable, e.g. to push a pushbutton of the overhead panel */
+  | { type: 'SET_LOCAL_VAR'; name: string; value: number };
+
+/** Reads a simulator variable, e.g. 'L:A32NX_EXT_PWR_AVAIL:1' */
+export type SimVarReader = (name: string) => number;
 
 /** A phrase spoken by a crew member */
 export interface CrewSpeech {

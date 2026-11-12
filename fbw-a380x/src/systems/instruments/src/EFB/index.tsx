@@ -7,6 +7,7 @@ import { AircraftContext, EfbWrapper, syncSettingsFromPersistentStorage } from '
 import { A380FailureDefinitions } from '../../../failures';
 import { AutomaticCallOutsPage } from './Pages/AutomaticCallOutsPage';
 import { VirtualCrewPage } from './Pages/VirtualCrewPage';
+import { CrewPage } from './Pages/CrewPage';
 import { a380xSyncedSettings } from './settingsSync';
 
 import './Efb.scss';
@@ -76,6 +77,7 @@ render(
         autoCalloutsPage: AutomaticCallOutsPage,
         virtualCrewPage: VirtualCrewPage,
       },
+      crewPage: CrewPage,
       hashFile: '/Data/a380x_hashes.json',
       hashSeed: 380,
     }}

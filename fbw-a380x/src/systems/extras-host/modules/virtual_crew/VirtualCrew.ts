@@ -14,14 +14,22 @@ import { NXDataStore, PilotSeat, PilotSeatEvents } from '@flybywiresim/fbw-sdk';
 import {
   VirtualCrewButtonEvents,
   VirtualCrewButtonLocalVars,
+  VirtualCrewCommand,
+  VirtualCrewCommandLocalVar,
   VirtualCrewDefaults,
   VirtualCrewSettingKeys,
+  VirtualCrewStatusLocalVars,
   VirtualCrewVoices,
+  VirtualCrewWorkflows,
 } from '../../../shared/src/VirtualCrew';
-import { VirtualCrewEngine } from './VirtualCrewEngine';
+import { ProcedureState, VirtualCrewEngine } from './VirtualCrewEngine';
+import { FlightPhaseContext, FlightPhaseManager } from './FlightPhaseManager';
 import { TakeoffProcedure } from './procedures/TakeoffProcedure';
 import { AircraftSnapshot, CrewAction, CrewInput, CrewOutput, CrewRole, CrewSeat, CrewVoice } from './VirtualCrewTypes';
 import { VoicePlayer } from './VoicePlayer';
+
+/** Speed above which the takeoff roll is considered started, in knots */
+const TAKEOFF_ROLL_SPEED = 30;
 
 /** Thrust lever angle of the FLX/MCT detent, in degrees */
 const FLX_MCT_DETENT_TLA = 35;
@@ -41,6 +49,11 @@ const FLAPS_LEVER_STEP_DELAY_MS = 400;
  */
 export class VirtualCrew implements Instrument {
   private readonly engine = new VirtualCrewEngine(TakeoffProcedure);
+
+  private readonly phases = new FlightPhaseManager();
+
+  /** Last published values of the status local variables */
+  private readonly publishedStatus = new Map<string, number>();
 
   private readonly player = new VoicePlayer((wwiseEvent) =>
     Coherent.call('PLAY_INSTRUMENT_SOUND', wwiseEvent).catch(console.error),
@@ -133,6 +146,47 @@ export class VirtualCrew implements Instrument {
       this.execute(this.engine.input(input, aircraft));
     }
     this.execute(this.engine.update(aircraft));
+
+    this.updatePhases(aircraft);
+  }
+
+  private updatePhases(aircraft: AircraftSnapshot): void {
+    const userSeat: CrewSeat = this.pilotSeat.get() === PilotSeat.Right ? 'FO' : 'CAPT';
+    const context: FlightPhaseContext = {
+      // simulation time, so that the preflight does not advance while the simulation is paused
+      now: SimVar.GetSimVarValue('E:SIMULATION TIME', SimVarValueType.Seconds) * 1000,
+      read: (name) => SimVar.GetSimVarValue(name, SimVarValueType.Number),
+      virtualSeat: userSeat === 'CAPT' ? 'FO' : 'CAPT',
+      onGround: aircraft.onGround,
+      takeoffRollStarted:
+        aircraft.onGround && aircraft.thrustLeversInTakeoffPosition && aircraft.indicatedAirspeed >= TAKEOFF_ROLL_SPEED,
+      takeoffProcedureCompleted: this.engine.currentState === ProcedureState.Completed,
+    };
+
+    const command = SimVar.GetSimVarValue(VirtualCrewCommandLocalVar, SimVarValueType.Number) as VirtualCrewCommand;
+    if (command !== VirtualCrewCommand.None) {
+      SimVar.SetSimVarValue(VirtualCrewCommandLocalVar, SimVarValueType.Number, VirtualCrewCommand.None);
+      if (!this.phases.command(command, context)) {
+        console.log(`[VirtualCrew] command ${command} not possible in phase ${this.phases.phase}`);
+      }
+    }
+
+    this.phases.update(context).forEach((action) => this.perform(action));
+
+    const status = this.phases.status;
+    const workflowIndex = VirtualCrewWorkflows.findIndex((workflow) => workflow.id === status.workflowId);
+    this.publish(VirtualCrewStatusLocalVars.Phase, status.phase);
+    this.publish(VirtualCrewStatusLocalVars.PreflightRemaining, status.preflightRemainingS);
+    this.publish(VirtualCrewStatusLocalVars.Accelerated, status.accelerated ? 1 : 0);
+    this.publish(VirtualCrewStatusLocalVars.Workflow, workflowIndex + 1);
+  }
+
+  /** Writes a status local variable when its value changed */
+  private publish(name: string, value: number): void {
+    if (this.publishedStatus.get(name) !== value) {
+      this.publishedStatus.set(name, value);
+      SimVar.SetSimVarValue(name, SimVarValueType.Number, value);
+    }
   }
 
   private onKeyIntercepted(data: KeyEventData): void {
@@ -175,6 +229,9 @@ export class VirtualCrew implements Instrument {
     switch (action.type) {
       case 'GEAR_UP':
         SimVar.SetSimVarValue('K:GEAR_UP', SimVarValueType.Number, 0);
+        break;
+      case 'SET_LOCAL_VAR':
+        SimVar.SetSimVarValue(action.name, SimVarValueType.Number, action.value);
         break;
       case 'FLAPS_SET': {
         // the flaps lever is moved one detent after the other

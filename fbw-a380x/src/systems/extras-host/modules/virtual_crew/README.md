@@ -12,11 +12,27 @@ of the camera, the virtual crew member is the pilot monitoring (PM).
 The buttons are sim events selected in the flyPad (Settings > Virtual Crew) and bound to a controller in the MSFS
 controls, or the local variables `L:A380X_VCREW_PRIMARY_BUTTON` / `L:A380X_VCREW_SECONDARY_BUTTON` (write 1).
 
+## Flight phases
+
+Each flight phase corresponds to a chapter of the SOP (`VirtualCrewFlightPhase` in `shared/src/VirtualCrew.ts`).
+The phases are managed in the flyPad crew page:
+
+- **Preflight** (optional, 40 minutes): the virtual crew member performs the workflows of their seat. The countdown
+  can be accelerated (x30) by clicking it, but only while no crew member performs a workflow.
+- **Takeoff briefing**: follows the preflight, or is started directly. The flyPad shows the takeoff data of the FMS
+  and collects the briefing data which is not available from the FMGS.
+- **Takeoff**: detected from the aircraft, from any ground phase.
+
+The flyPad sends commands with `L:A380X_VCREW_COMMAND` and reads the state from `L:A380X_VCREW_PHASE`,
+`L:A380X_VCREW_PREFLIGHT_REMAINING`, `L:A380X_VCREW_ACCELERATED` and `L:A380X_VCREW_WORKFLOW`.
+
 ## Structure
 
 | File                           | Purpose                                                                    |
 |--------------------------------|----------------------------------------------------------------------------|
 | `procedures/`                  | The SOP as data, one procedure per flight phase, referencing the SOP items |
+| `FlightPhaseManager.ts`        | Flight phases, preflight countdown, workflows of the phases (unit tested)  |
+| `workflows/`                   | SOP items performed by one crew member at a human pace (unit tested)       |
 | `VirtualCrewEngine.ts`         | Executes a procedure, pure logic without simulator access (unit tested)    |
 | `VirtualCrew.ts`               | Reads the aircraft, executes the actions, handles buttons and settings     |
 | `VoicePlayer.ts`               | Plays the phrases one after the other                                      |
@@ -30,3 +46,4 @@ The voices are generated with `tools/virtual-crew-voices`, see its README for th
 | Procedure | SOP chapter                                           |
 |-----------|-------------------------------------------------------|
 | Takeoff   | Takeoff: from "TAKEOFF ... ANNOUNCE" to "FLAPS ZERO"  |
+| Initial power up (FO workflow) | Preliminary Cockpit Preparation: "Initial Power Up" (p. 3) |
