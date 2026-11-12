@@ -1,8 +1,19 @@
 // Copyright (c) 2025-2026 FlyByWire Simulations
 // SPDX-License-Identifier: GPL-3.0
-import { ArraySubject, EventBus, Instrument } from '@microsoft/msfs-sdk';
+import { ArraySubject, ConsumerSubject, EventBus, Instrument } from '@microsoft/msfs-sdk';
 import { AtcFmsMessages, FmsAtcMessages } from '@datalink/atc';
-import { AtisMessage, AtisType, AtsuStatusCodes, DatalinkModeCode, DatalinkStatusCode } from '@datalink/common';
+import {
+  AtisMessage,
+  AtisType,
+  AtsuMessage,
+  AtsuMessageType,
+  AtsuStatusCodes,
+  CpdlcMessage,
+  DatalinkModeCode,
+  DatalinkStatusCode,
+  DclMessage,
+  OclMessage,
+} from '@datalink/common';
 import { RouterFmsMessages } from '@datalink/router';
 import { MessageStorage } from './MessageStorage';
 import { FmsData } from '@flybywiresim/fbw-sdk';
@@ -54,6 +65,15 @@ export class AtcDatalinkSystem implements Instrument {
   private readonly sub = this.bus.getSubscriber<AtcFmsMessages & FmsData & RouterFmsMessages>();
 
   private readonly fmsBusSub = this.bus.getSubscriber<FmsToDatalinkSubsystemEvents>();
+
+  /** Flight number (ATC callsign) entered in the FMS */
+  public readonly fmsFlightNumber = ConsumerSubject.create(this.sub.on('fmsFlightNumber'), null);
+
+  /** Origin airport of the active flight plan */
+  public readonly fmsOrigin = ConsumerSubject.create(this.sub.on('fmsOrigin'), null);
+
+  /** Destination airport of the active flight plan */
+  public readonly fmsDestination = ConsumerSubject.create(this.sub.on('fmsDestination'), null);
 
   private requestId: number = 0;
 
@@ -417,6 +437,20 @@ export class AtcDatalinkSystem implements Instrument {
         return id === requestId;
       });
     });
+  }
+
+  public registerMessages(messages: AtsuMessage[]): void {
+    if (messages.length === 0) {
+      return;
+    }
+
+    if (messages[0].Type === AtsuMessageType.CPDLC) {
+      this.publisher.pub('atcRegisterCpdlcMessages', messages as CpdlcMessage[], true, false);
+    } else if (messages[0].Type === AtsuMessageType.DCL) {
+      this.publisher.pub('atcRegisterDclMessages', messages as DclMessage[], true, false);
+    } else if (messages[0].Type === AtsuMessageType.OCL) {
+      this.publisher.pub('atcRegisterOclMessages', messages as OclMessage[], true, false);
+    }
   }
 
   /**
