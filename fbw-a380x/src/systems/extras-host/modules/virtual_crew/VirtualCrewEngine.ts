@@ -103,8 +103,13 @@ export class VirtualCrewEngine {
     const step = this.procedure.steps[this.stepIndex];
 
     if (input === 'PRIMARY') {
-      if (step.type === 'order' && step.available(aircraft)) {
-        this.executeOrder(step, aircraft, output);
+      // the pilot flying can give the next order before the pending callouts, e.g. gear up before "positive climb":
+      // the order is executed and the callouts which are not needed anymore are dropped
+      const orderIndex = this.nextOrderIndex();
+      const order = orderIndex >= 0 ? this.procedure.steps[orderIndex] : undefined;
+      if (order?.type === 'order' && order.available(aircraft)) {
+        this.stepIndex = orderIndex;
+        this.executeOrder(order, aircraft, output);
         this.advance();
       }
     } else if (this.procedure.abort?.available(aircraft, this.stepIndex)) {
@@ -115,6 +120,16 @@ export class VirtualCrewEngine {
     }
 
     return output;
+  }
+
+  /** @returns the index of the current or next order step, -1 if there is none */
+  private nextOrderIndex(): number {
+    for (let i = this.stepIndex; i < this.procedure.steps.length; i++) {
+      if (this.procedure.steps[i].type === 'order') {
+        return i;
+      }
+    }
+    return -1;
   }
 
   /** Starts the procedure again from the beginning */

@@ -135,6 +135,34 @@ describe('virtual crew - takeoff', () => {
     expect(engine.currentStepId).toBe('flapsZero');
   });
 
+  it('raises the gear when ordered before the positive climb callout', () => {
+    engine.input('PRIMARY', lineup);
+    const roll = aircraft({ thrustLeversInTakeoffPosition: true });
+    engine.update({ ...roll, indicatedAirspeed: 151 });
+
+    // just after lift-off, below the radio altitude of the callout
+    const liftOff = aircraft({ onGround: false, indicatedAirspeed: 155, radioAltitude: 10, verticalSpeed: 600 });
+    const output = engine.input('PRIMARY', liftOff);
+    expect(said(output)).toEqual(['PF:gearUp', 'PM:gearUp']);
+    expect(output.actions).toEqual([{ type: 'GEAR_UP' }]);
+
+    // no late "positive climb", the next order is flaps 1
+    expect(said(engine.update({ ...liftOff, radioAltitude: 100, gearLeverUp: true }))).toEqual([]);
+    expect(said(engine.input('PRIMARY', { ...liftOff, radioAltitude: 1000, indicatedAirspeed: 181 }))).toEqual([
+      'PF:flapsOne',
+      'PM:flapsOne',
+    ]);
+  });
+
+  it('does not raise the gear on the ground', () => {
+    engine.input('PRIMARY', lineup);
+    const roll = aircraft({ thrustLeversInTakeoffPosition: true, indicatedAirspeed: 120 });
+    engine.update(roll);
+    const output = engine.input('PRIMARY', roll);
+    expect(output.speech).toEqual([]);
+    expect(output.actions).toEqual([]);
+  });
+
   it('ignores the primary button when no order is expected', () => {
     engine.input('PRIMARY', lineup);
     const roll = aircraft({ thrustLeversInTakeoffPosition: true, indicatedAirspeed: 60 });
