@@ -14,7 +14,7 @@ import { WorkflowRunner } from './workflows/WorkflowRunner';
 import { InitialPowerUpWorkflow } from './workflows/InitialPowerUpWorkflow';
 import {
   AircraftStatusWorkflow,
-  FireTestApuStartWorkflow,
+  FireTestsWorkflow,
   FmsCrosscheckWorkflow,
   GlareshieldWorkflow,
   OverheadPanelWorkflow,
@@ -32,7 +32,7 @@ const workflowsById = new Map<string, Workflow>(
   [
     InitialPowerUpWorkflow,
     AircraftStatusWorkflow,
-    FireTestApuStartWorkflow,
+    FireTestsWorkflow,
     OverheadPanelWorkflow,
     PedestalWorkflow,
     GlareshieldWorkflow,
@@ -61,6 +61,8 @@ export interface FlightPhaseContext {
   takeoffRollStarted: boolean;
   /** The takeoff procedure (up to flaps zero) is completed */
   takeoffProcedureCompleted: boolean;
+  /** Another task of the crew is in progress (e.g. a checklist), the countdown cannot be accelerated */
+  crewBusy?: boolean;
 }
 
 export interface FlightPhaseStatus {
@@ -174,7 +176,7 @@ export class FlightPhaseManager {
         return true;
 
       case VirtualCrewCommand.ToggleAcceleration:
-        if (this.currentPhase !== VirtualCrewFlightPhase.Preflight || this.busy) {
+        if (this.currentPhase !== VirtualCrewFlightPhase.Preflight || this.busy || context.crewBusy) {
           return false;
         }
         this.accelerated = !this.accelerated;
@@ -213,8 +215,8 @@ export class FlightPhaseManager {
     this.lastUpdate = context.now;
 
     if (this.currentPhase === VirtualCrewFlightPhase.Preflight) {
-      // the countdown is only accelerated while nobody performs a workflow
-      if (this.busy) {
+      // the countdown is only accelerated while nobody performs a workflow or reads a checklist
+      if (this.busy || context.crewBusy) {
         this.accelerated = false;
       }
       const rate = this.accelerated ? VIRTUAL_CREW_PREFLIGHT_ACCELERATION : 1;

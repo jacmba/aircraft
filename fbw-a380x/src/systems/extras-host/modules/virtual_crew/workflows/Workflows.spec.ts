@@ -4,12 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import { CrewAction, SimVarReader } from '../VirtualCrewTypes';
 import { InitialPowerUpWorkflow } from './InitialPowerUpWorkflow';
-import {
-  FireTestApuStartWorkflow,
-  GlareshieldWorkflow,
-  OverheadPanelWorkflow,
-  PedestalWorkflow,
-} from './PreflightWorkflows';
+import { FireTestsWorkflow, GlareshieldWorkflow, OverheadPanelWorkflow, PedestalWorkflow } from './PreflightWorkflows';
 import { Workflow } from './Workflow';
 import { WorkflowRunner } from './WorkflowRunner';
 
@@ -95,22 +90,8 @@ describe('virtual crew workflows', () => {
   });
 
   describe('cockpit preparation (SOP p. 6-17)', () => {
-    it('switches the APU master on and starts the APU', () => {
-      const { actions } = perform(FireTestApuStartWorkflow, () => 0);
-      // the start is only pressed after the master switch, which this test does not simulate
-      expect(setVars(actions)).toEqual(['L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON=1']);
-
-      const masterOn = perform(FireTestApuStartWorkflow, (name) =>
-        name === 'L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON' ? 1 : 0,
-      );
-      expect(setVars(masterOn.actions)).toEqual(['L:A32NX_OVHD_APU_START_PB_IS_ON=1']);
-    });
-
-    it('does not start an APU which is already available', () => {
-      const { actions } = perform(FireTestApuStartWorkflow, (name) =>
-        ['L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON', 'L:A32NX_OVHD_APU_START_PB_IS_AVAILABLE'].includes(name) ? 1 : 0,
-      );
-      expect(actions).toEqual([]);
+    it('leaves the APU start to the captain', () => {
+      expect(perform(FireTestsWorkflow, () => 0).actions).toEqual([]);
     });
 
     it('sets the recorder and aligns the three IRs in NAV', () => {

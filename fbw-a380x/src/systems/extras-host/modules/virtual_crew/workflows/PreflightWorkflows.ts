@@ -9,10 +9,6 @@ import { verify, Workflow, WorkflowStep } from './Workflow';
  * The other items take the time of the crew member and are marked "(not automated yet)" when they change a setting.
  */
 
-const APU_MASTER = 'L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON';
-const APU_START = 'L:A32NX_OVHD_APU_START_PB_IS_ON';
-const APU_AVAILABLE = 'L:A32NX_OVHD_APU_START_PB_IS_AVAILABLE';
-
 /** IR mode selector: 0 = OFF, 1 = NAV, 2 = ATT */
 const irToNav = (id: number): WorkflowStep => ({
   item: `IR ${id} MODE ... NAV`,
@@ -33,9 +29,12 @@ export const AircraftStatusWorkflow: Workflow = {
   ],
 };
 
-/** SOP p. 6-7, "Fire tests and APU startup" (first officer) */
-export const FireTestApuStartWorkflow: Workflow = {
-  id: 'fireTestApuStart',
+/**
+ * SOP p. 6-7, "Fire tests and APU startup" (first officer).
+ * The APU start is left to the captain: APU MASTER SWITCH and APU START are not part of the virtual crew workflow.
+ */
+export const FireTestsWorkflow: Workflow = {
+  id: 'fireTests',
   seat: 'FO',
   steps: [
     verify('RMP 1 and 2 ... ON'),
@@ -45,19 +44,6 @@ export const FireTestApuStartWorkflow: Workflow = {
     verify('ENGINE 1(2)(3)(4) FIRE ... CHECK IN and GUARDED', 4000),
     verify('ENGINE 1(2)(3)(4) AGENT 1 and 2 ... OFF', 3000),
     verify('FIRE TEST ... PRESS and CHECK (not automated yet)', 8000),
-    {
-      item: 'APU MASTER SWITCH ... ON',
-      durationMs: 2000,
-      condition: (read) => read(APU_MASTER) === 0,
-      actions: [{ type: 'SET_LOCAL_VAR', name: APU_MASTER, value: 1 }],
-    },
-    {
-      item: 'APU START ... ON',
-      // the APU flap has to open before the start
-      durationMs: 4000,
-      condition: (read) => read(APU_MASTER) === 1 && read(APU_AVAILABLE) === 0 && read(APU_START) === 0,
-      actions: [{ type: 'SET_LOCAL_VAR', name: APU_START, value: 1 }],
-    },
     verify('EXTERNAL POWER ... AS REQUIRED'),
   ],
 };

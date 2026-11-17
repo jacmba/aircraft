@@ -14,9 +14,12 @@ import { NXDataStore, PilotSeat, PilotSeatEvents } from '@flybywiresim/fbw-sdk';
 import {
   VirtualCrewButtonEvents,
   VirtualCrewButtonLocalVars,
+  VirtualCrewChecklists,
+  VirtualCrewChecklistStep,
   VirtualCrewCommand,
   VirtualCrewCommandLocalVar,
   VirtualCrewDefaults,
+  VirtualCrewFlightPhase,
   VirtualCrewSettingKeys,
   VirtualCrewStatusLocalVars,
   VirtualCrewVoices,
@@ -27,6 +30,26 @@ import { FlightPhaseContext, FlightPhaseManager } from './FlightPhaseManager';
 import { TakeoffProcedure } from './procedures/TakeoffProcedure';
 import { AircraftSnapshot, CrewAction, CrewInput, CrewOutput, CrewRole, CrewSeat, CrewVoice } from './VirtualCrewTypes';
 import { VoicePlayer } from './VoicePlayer';
+import { ChecklistContext, ChecklistManager } from './checklists/ChecklistManager';
+import { ChecklistOutput, EclState, EcpButton } from './checklists/ChecklistRunner';
+
+/** Events of the FWS describing the ECL (see FwsEvents of the EWD) */
+interface FwsEclEvents {
+  fws_show_normal_checklists: boolean;
+  fws_normal_checklists_id: number;
+  fws_active_item: number;
+  fws_normal_checklists: { id: string; itemsChecked: boolean[]; procedureCompleted: boolean }[];
+}
+
+/** Local variables of the buttons of the ECAM control panel */
+const EcpButtonLocalVars: Record<Exclude<EcpButton, 'CHECK'>, string> = {
+  CL: 'L:A32NX_BTN_CL',
+  UP: 'L:A32NX_BTN_UP',
+  DOWN: 'L:A32NX_BTN_DOWN',
+};
+
+/** Time an ECAM control panel button is held, in milliseconds (the FWS reacts to the rising edge) */
+const ECP_BUTTON_PRESS_MS = 150;
 
 /** Speed above which the takeoff roll is considered started, in knots */
 const TAKEOFF_ROLL_SPEED = 30;
@@ -51,6 +74,18 @@ export class VirtualCrew implements Instrument {
   private readonly engine = new VirtualCrewEngine(TakeoffProcedure);
 
   private readonly phases = new FlightPhaseManager();
+
+  private readonly checklists = new ChecklistManager();
+
+  /** State of the ECL, as published by the FWS */
+  private readonly ecl: EclState & {
+    checklists: Map<number, { itemsChecked: boolean[]; procedureCompleted: boolean }>;
+  } = {
+    shown: false,
+    checklistId: 0,
+    selectedLine: 0,
+    checklists: new Map(),
+  };
 
   /** Last published values of the status local variables */
   private readonly publishedStatus = new Map<string, number>();
@@ -122,6 +157,20 @@ export class VirtualCrew implements Instrument {
       .getSubscriber<KeyEvents>()
       .on('key_intercept')
       .handle((data) => this.onKeyIntercepted(data));
+
+    const fws = this.bus.getSubscriber<FwsEclEvents>();
+    fws.on('fws_show_normal_checklists').handle((shown) => (this.ecl.shown = shown));
+    fws.on('fws_normal_checklists_id').handle((id) => (this.ecl.checklistId = id));
+    fws.on('fws_active_item').handle((line) => (this.ecl.selectedLine = line));
+    fws.on('fws_normal_checklists').handle((checklists) => {
+      this.ecl.checklists.clear();
+      checklists.forEach((checklist) =>
+        this.ecl.checklists.set(parseInt(checklist.id), {
+          itemsChecked: checklist.itemsChecked,
+          procedureCompleted: checklist.procedureCompleted,
+        }),
+      );
+    });
   }
 
   public onUpdate(): void {
@@ -143,35 +192,106 @@ export class VirtualCrew implements Instrument {
     const aircraft = VirtualCrew.readAircraft();
 
     for (const input of this.pendingInputs.splice(0)) {
-      this.execute(this.engine.input(input, aircraft));
+      if (!this.handleChecklistInput(input, aircraft, now)) {
+        this.execute(this.engine.input(input, aircraft));
+      }
     }
     this.execute(this.engine.update(aircraft));
 
-    this.updatePhases(aircraft);
+    this.updatePhases(aircraft, now);
+    this.executeChecklist(this.checklists.update(now, this.ecl, VirtualCrew.read));
   }
 
-  private updatePhases(aircraft: AircraftSnapshot): void {
-    const userSeat: CrewSeat = this.pilotSeat.get() === PilotSeat.Right ? 'FO' : 'CAPT';
+  private get checklistContext(): ChecklistContext {
+    return { phase: this.phases.phase, briefingDone: this.phases.status.briefingDone };
+  }
+
+  /**
+   * The buttons first serve the checklists: the primary button requests the available checklist or responds to the
+   * current item, the secondary button stops the checklist being read
+   * @returns true if the input was used by the checklists
+   */
+  private handleChecklistInput(input: CrewInput, aircraft: AircraftSnapshot, now: number): boolean {
+    const runner = this.checklists.runner;
+    if (runner.running) {
+      if (input === 'PRIMARY') {
+        runner.respond();
+      } else {
+        runner.cancel();
+      }
+      return true;
+    }
+
+    if (input === 'PRIMARY' && aircraft.onGround) {
+      const output = this.checklists.request(this.checklistContext, now);
+      if (output) {
+        this.executeChecklist(output);
+        return true;
+      }
+    }
+
+    // no takeoff call during the preparation of the flight
+    const phase = this.phases.phase;
+    return phase === VirtualCrewFlightPhase.Preflight || phase === VirtualCrewFlightPhase.TakeoffBriefing;
+  }
+
+  private executeChecklist(output: ChecklistOutput): void {
+    output.speech.forEach((speech) => this.player.enqueue({ voice: this.voiceOf(speech.role), line: speech.line }));
+    output.presses.forEach((button) => this.pressEcpButton(button));
+  }
+
+  /** Presses a button of the ECAM control panel, the CHECK button on the side of the pilot monitoring */
+  private pressEcpButton(button: EcpButton): void {
+    const name =
+      button === 'CHECK'
+        ? this.virtualSeat === 'FO'
+          ? 'L:A32NX_BTN_CHECK_RH'
+          : 'L:A32NX_BTN_CHECK_LH'
+        : EcpButtonLocalVars[button];
+    SimVar.SetSimVarValue(name, SimVarValueType.Bool, 1);
+    setTimeout(() => SimVar.SetSimVarValue(name, SimVarValueType.Bool, 0), ECP_BUTTON_PRESS_MS);
+  }
+
+  private get virtualSeat(): CrewSeat {
+    return this.pilotSeat.get() === PilotSeat.Right ? 'CAPT' : 'FO';
+  }
+
+  private static read(name: string): number {
+    return SimVar.GetSimVarValue(name, SimVarValueType.Number);
+  }
+
+  private updatePhases(aircraft: AircraftSnapshot, now: number): void {
     const context: FlightPhaseContext = {
       // simulation time, so that the preflight does not advance while the simulation is paused
       now: SimVar.GetSimVarValue('E:SIMULATION TIME', SimVarValueType.Seconds) * 1000,
-      read: (name) => SimVar.GetSimVarValue(name, SimVarValueType.Number),
-      virtualSeat: userSeat === 'CAPT' ? 'FO' : 'CAPT',
+      read: VirtualCrew.read,
+      virtualSeat: this.virtualSeat,
       onGround: aircraft.onGround,
       takeoffRollStarted:
         aircraft.onGround && aircraft.thrustLeversInTakeoffPosition && aircraft.indicatedAirspeed >= TAKEOFF_ROLL_SPEED,
       takeoffProcedureCompleted: this.engine.currentState === ProcedureState.Completed,
+      crewBusy: this.checklists.runner.running,
     };
 
     const command = SimVar.GetSimVarValue(VirtualCrewCommandLocalVar, SimVarValueType.Number) as VirtualCrewCommand;
     if (command !== VirtualCrewCommand.None) {
       SimVar.SetSimVarValue(VirtualCrewCommandLocalVar, SimVarValueType.Number, VirtualCrewCommand.None);
-      if (!this.phases.command(command, context)) {
+      if (command === VirtualCrewCommand.RequestChecklist) {
+        const output = this.checklists.request(this.checklistContext, now);
+        if (output) {
+          this.executeChecklist(output);
+        }
+      } else if (!this.phases.command(command, context)) {
         console.log(`[VirtualCrew] command ${command} not possible in phase ${this.phases.phase}`);
       }
     }
 
+    const previousPhase = this.phases.phase;
     this.phases.update(context).forEach((action) => this.perform(action));
+    if (this.phases.phase === VirtualCrewFlightPhase.Idle && previousPhase !== VirtualCrewFlightPhase.Idle) {
+      // the flight is over or has been ended, the checklists start again with the next flight
+      this.checklists.reset();
+    }
 
     const status = this.phases.status;
     const workflowIndex = VirtualCrewWorkflows.findIndex((workflow) => workflow.id === status.workflowId);
@@ -180,6 +300,29 @@ export class VirtualCrew implements Instrument {
     this.publish(VirtualCrewStatusLocalVars.Accelerated, status.accelerated ? 1 : 0);
     this.publish(VirtualCrewStatusLocalVars.Workflow, workflowIndex + 1);
     this.publish(VirtualCrewStatusLocalVars.BriefingDone, status.briefingDone ? 1 : 0);
+
+    const runner = this.checklists.runner;
+    const checklistIndex = (id: string | undefined) =>
+      VirtualCrewChecklists.findIndex((checklist) => checklist.id === id) + 1;
+    this.publish(
+      VirtualCrewStatusLocalVars.ChecklistAvailable,
+      checklistIndex(this.checklists.available(this.checklistContext)?.id),
+    );
+    this.publish(VirtualCrewStatusLocalVars.ChecklistRunning, checklistIndex(runner.currentChecklist?.id));
+    this.publish(VirtualCrewStatusLocalVars.ChecklistItem, runner.running ? runner.currentItemIndex : -1);
+    this.publish(
+      VirtualCrewStatusLocalVars.ChecklistStep,
+      runner.currentChecklist || runner.currentStep === VirtualCrewChecklistStep.Failed
+        ? runner.currentStep
+        : VirtualCrewChecklistStep.None,
+    );
+    this.publish(
+      VirtualCrewStatusLocalVars.ChecklistsDone,
+      VirtualCrewChecklists.reduce(
+        (bits, checklist, i) => bits | (this.checklists.isDone(checklist.id) ? 1 << i : 0),
+        0,
+      ),
+    );
   }
 
   /** Writes a status local variable when its value changed */
@@ -251,8 +394,8 @@ export class VirtualCrew implements Instrument {
 
   /** The user is the pilot flying, seated where the camera is */
   private voiceOf(role: CrewRole): CrewVoice {
-    const userSeat: CrewSeat = this.pilotSeat.get() === PilotSeat.Right ? 'FO' : 'CAPT';
-    const otherSeat: CrewSeat = userSeat === 'CAPT' ? 'FO' : 'CAPT';
+    const otherSeat = this.virtualSeat;
+    const userSeat: CrewSeat = otherSeat === 'CAPT' ? 'FO' : 'CAPT';
     return this.voices[role === 'PF' ? userSeat : otherSeat];
   }
 

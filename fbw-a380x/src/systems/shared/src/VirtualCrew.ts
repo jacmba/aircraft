@@ -146,6 +146,8 @@ export enum VirtualCrewCommand {
   CompleteTakeoffBriefing = 4,
   /** Ends the current flight */
   Reset = 5,
+  /** Requests the next available checklist, like the primary button */
+  RequestChecklist = 6,
 }
 
 export const VirtualCrewCommandLocalVar = 'L:A380X_VCREW_COMMAND';
@@ -162,7 +164,59 @@ export const VirtualCrewStatusLocalVars = {
   Workflow: 'L:A380X_VCREW_WORKFLOW',
   /** 1 if the takeoff briefing has been performed in the current flight */
   BriefingDone: 'L:A380X_VCREW_BRIEFING_DONE',
+  /** Index in {@link VirtualCrewChecklists} + 1 of the checklist which can be requested, 0 if none */
+  ChecklistAvailable: 'L:A380X_VCREW_CHECKLIST_AVAILABLE',
+  /** Index in {@link VirtualCrewChecklists} + 1 of the checklist being read, 0 if none */
+  ChecklistRunning: 'L:A380X_VCREW_CHECKLIST_RUNNING',
+  /** Index of the checklist item being read, -1 if none */
+  ChecklistItem: 'L:A380X_VCREW_CHECKLIST_ITEM',
+  /** {@link VirtualCrewChecklistStep} of the checklist being read */
+  ChecklistStep: 'L:A380X_VCREW_CHECKLIST_STEP',
+  /** Bit field of the completed checklists, bit n for {@link VirtualCrewChecklists}[n] */
+  ChecklistsDone: 'L:A380X_VCREW_CHECKLISTS_DONE',
 } as const;
+
+/**
+ * Checklists read by the virtual crew, in the order of the SOP. They are the normal checklists of the ECL (EWD), the
+ * pilot monitoring activates them on the ECAM control panel and checks the items as they are read.
+ */
+export const VirtualCrewChecklists = [
+  // "BEFORE START CHECKLIST down to the line", after the takeoff briefing
+  {
+    id: 'cockpitPreparation',
+    name: 'Cockpit preparation',
+    eclId: 1000001,
+    items: ['GEAR PINS & COVERS', 'FUEL QUANTITY', 'SEAT BELTS', 'BARO REF'],
+  },
+  // "BEFORE START CHECKLIST below the line", when the preflight is completed
+  {
+    id: 'beforeStart',
+    name: 'Before start',
+    eclId: 1000002,
+    items: ['PARKING BRAKE', 'T.O SPEEDS & THRUST', 'BEACON'],
+  },
+] as const;
+
+export type VirtualCrewChecklistId = (typeof VirtualCrewChecklists)[number]['id'];
+
+/** Step of the checklist being read, published in {@link VirtualCrewStatusLocalVars.ChecklistStep} */
+export enum VirtualCrewChecklistStep {
+  None = 0,
+  /** The pilot monitoring activates the checklist on the ECL */
+  Opening = 1,
+  /** The pilot monitoring reads the item */
+  Reading = 2,
+  /** The pilot monitoring waits for the response of the pilot flying (primary button) */
+  AwaitingResponse = 3,
+  /** The pilot monitoring found a discrepancy and waits for a new response */
+  Discrepancy = 4,
+  /** The pilot monitoring checks the item on the ECL */
+  Checking = 5,
+  /** The pilot monitoring completes the checklist on the ECL */
+  Completing = 6,
+  /** The ECL could not be operated (e.g. not powered), the checklist was abandoned */
+  Failed = 7,
+}
 
 /**
  * Workflows of the virtual crew, the order defines the value of {@link VirtualCrewStatusLocalVars.Workflow}.
@@ -173,7 +227,7 @@ export const VirtualCrewStatusLocalVars = {
 export const VirtualCrewWorkflows = [
   { id: 'initialPowerUp', name: 'Initial power up', seat: 'FO', preflightMinute: 0 },
   { id: 'aircraftStatus', name: 'Aircraft status verification', seat: 'CAPT', preflightMinute: 2 },
-  { id: 'fireTestApuStart', name: 'Fire tests and APU start', seat: 'FO', preflightMinute: 4 },
+  { id: 'fireTests', name: 'Fire tests', seat: 'FO', preflightMinute: 4 },
   { id: 'overheadPanel', name: 'Overhead panel preparation', seat: 'FO', preflightMinute: 8 },
   { id: 'pedestal', name: 'Main instrument panel and pedestal', seat: 'FO', preflightMinute: 15 },
   { id: 'glareshield', name: 'Glareshield preparation', seat: 'FO', preflightMinute: 22 },
@@ -186,7 +240,25 @@ export type VirtualCrewWorkflowId = (typeof VirtualCrewWorkflows)[number]['id'];
  * Data of the takeoff briefing which is not available from the FMGS, entered in the flyPad.
  * The values are stored per flight and cleared when the flight is ended in the flyPad.
  */
-export const VirtualCrewBriefingFields = [
+export const VirtualCrewBriefingFields: readonly {
+  key: string;
+  label: string;
+  placeholder: string;
+  /** Data of the FMGS used as value as long as the pilot does not enter another one */
+  fmsDefault?: 'takeoffThrust' | 'takeoffFlaps';
+}[] = [
+  {
+    key: 'A380X_VCREW_BRIEFING_TO_THRUST',
+    label: 'Takeoff thrust',
+    placeholder: 'e.g. FLEX 52, TOGA',
+    fmsDefault: 'takeoffThrust',
+  },
+  {
+    key: 'A380X_VCREW_BRIEFING_TO_FLAPS',
+    label: 'Takeoff flaps',
+    placeholder: 'e.g. 1+F, 2, 3',
+    fmsDefault: 'takeoffFlaps',
+  },
   { key: 'A380X_VCREW_BRIEFING_ATIS', label: 'ATIS information', placeholder: 'e.g. K' },
   { key: 'A380X_VCREW_BRIEFING_RWY_COND', label: 'Runway condition', placeholder: 'e.g. DRY, WET' },
   { key: 'A380X_VCREW_BRIEFING_TAXI', label: 'Taxi route', placeholder: 'e.g. A B5 holding point 27R' },
@@ -195,4 +267,4 @@ export const VirtualCrewBriefingFields = [
   { key: 'A380X_VCREW_BRIEFING_DEP_FREQ', label: 'Departure frequency', placeholder: 'e.g. 125.800' },
   { key: 'A380X_VCREW_BRIEFING_EO_PROC', label: 'Engine failure procedure', placeholder: 'e.g. EOSID, straight ahead' },
   { key: 'A380X_VCREW_BRIEFING_THREATS', label: 'Threats / remarks', placeholder: 'e.g. heavy traffic, MEL items' },
-] as const;
+];

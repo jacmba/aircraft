@@ -152,6 +152,15 @@ describe('virtual crew flight phases', () => {
     expect(manager.status.preflightRemainingS).toBe(remaining - 5);
   });
 
+  it('does not accelerate the countdown while a checklist is read', () => {
+    manager.command(VirtualCrewCommand.StartPreflight, context());
+    run(10);
+    expect(manager.command(VirtualCrewCommand.ToggleAcceleration, context({ crewBusy: true }))).toBe(false);
+    expect(manager.command(VirtualCrewCommand.ToggleAcceleration, context())).toBe(true);
+    run(1, { crewBusy: true });
+    expect(manager.status.accelerated).toBe(false);
+  });
+
   it('completes an accelerated preflight once every workflow is done', () => {
     manager.command(VirtualCrewCommand.StartPreflight, context());
     // the user clicks the countdown whenever the acceleration is possible

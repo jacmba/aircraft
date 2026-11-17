@@ -30,11 +30,25 @@ The phases are managed in the flyPad crew page:
 The flyPad sends commands with `L:A380X_VCREW_COMMAND` and reads the state from `L:A380X_VCREW_PHASE`,
 `L:A380X_VCREW_PREFLIGHT_REMAINING`, `L:A380X_VCREW_ACCELERATED` and `L:A380X_VCREW_WORKFLOW`.
 
+## Checklists
+
+The checklists are the normal checklists of the ECL (`checklists/Checklists.ts`), in the order of the SOP:
+
+- COCKPIT PREPARATION ("before start checklist down to the line"), available after the takeoff briefing
+- BEFORE START ("below the line"), available once the cockpit preparation checklist and the preflight are completed
+
+The pilot flying requests the checklist with the primary button. The pilot monitoring activates it on the ECL with the
+ECAM control panel (CL, CHECK, UP, DOWN), operated in a closed loop with the ECL state published by the FWS. For each
+item, the pilot monitoring reads the challenge, the pilot flying responds with the primary button, the pilot
+monitoring verifies the item (sensed items by the FWS, some non sensed items through the aircraft state) and checks
+it on the ECL, or asks to check on a discrepancy. The secondary button stops the checklist.
+
 ## Structure
 
 | File                           | Purpose                                                                    |
 |--------------------------------|----------------------------------------------------------------------------|
 | `procedures/`                  | The SOP as data, one procedure per flight phase, referencing the SOP items |
+| `checklists/`                  | ECL checklists, reading and ECL operation (unit tested with a model of the ECL) |
 | `FlightPhaseManager.ts`        | Flight phases, preflight countdown, workflows of the phases (unit tested)  |
 | `workflows/`                   | SOP items performed by one crew member at a human pace (unit tested)       |
 | `VirtualCrewEngine.ts`         | Executes a procedure, pure logic without simulator access (unit tested)    |
@@ -53,6 +67,7 @@ The voices are generated with `tools/virtual-crew-voices`, see its README for th
 | Preflight workflows | Preliminary Cockpit Preparation and Cockpit Preparation (p. 3-17), see `workflows/` |
 
 Items of the workflows are only automated when the cockpit control can be operated reliably through a variable or an
-event (batteries, external power, APU, ADIRS, recorder, parking brake, flight director). The other items take the
+event (batteries, external power, ADIRS, recorder, parking brake, flight director). The APU and the FMS are left to the
+captain. The other items take the
 time of the crew member and are marked "(not automated yet)" when they change a setting, e.g. the exterior lights
 and the signs, which use the light and switch templates of the simulator.

@@ -1,16 +1,90 @@
 {
   "comment": "Single source of the virtual crew phrases. The generator script (tools/virtual-crew-voices) creates one audio file per voice and line. 'text' is what is spoken, written for the speech synthesiser.",
-  "voices": ["male", "female"],
+  "voices": [
+    "male",
+    "female"
+  ],
   "lines": {
-    "takeoff": { "text": "Takeoff." },
-    "thrustSet": { "text": "Thrust set." },
-    "oneHundredKnots": { "text": "One hundred knots." },
-    "v1": { "text": "Vee one." },
-    "rotate": { "text": "Rotate." },
-    "positiveClimb": { "text": "Positive climb." },
-    "gearUp": { "text": "Gear up." },
-    "flapsOne": { "text": "Flaps one." },
-    "flapsZero": { "text": "Flaps zero." },
-    "stop": { "text": "Stop!" }
+    "takeoff": {
+      "text": "Takeoff."
+    },
+    "thrustSet": {
+      "text": "Thrust set."
+    },
+    "oneHundredKnots": {
+      "text": "One hundred knots."
+    },
+    "v1": {
+      "text": "Vee one."
+    },
+    "rotate": {
+      "text": "Rotate."
+    },
+    "positiveClimb": {
+      "text": "Positive climb."
+    },
+    "gearUp": {
+      "text": "Gear up."
+    },
+    "flapsOne": {
+      "text": "Flaps one."
+    },
+    "flapsZero": {
+      "text": "Flaps zero."
+    },
+    "stop": {
+      "text": "Stop!"
+    },
+    "cockpitPreparationChecklist": {
+      "text": "Cockpit preparation checklist."
+    },
+    "cockpitPreparationChecklistComplete": {
+      "text": "Cockpit preparation checklist complete."
+    },
+    "beforeStartChecklist": {
+      "text": "Before start checklist."
+    },
+    "beforeStartChecklistComplete": {
+      "text": "Before start checklist complete."
+    },
+    "clGearPinsAndCovers": {
+      "text": "Gear pins and covers?"
+    },
+    "clFuelQuantity": {
+      "text": "Fuel quantity?"
+    },
+    "clSeatBelts": {
+      "text": "Seat belts?"
+    },
+    "clBaroRef": {
+      "text": "Baro reference?"
+    },
+    "clParkingBrake": {
+      "text": "Parking brake?"
+    },
+    "clTakeoffSpeedsAndThrust": {
+      "text": "Takeoff speeds and thrust?"
+    },
+    "clBeacon": {
+      "text": "Beacon?"
+    },
+    "respRemoved": {
+      "text": "Removed."
+    },
+    "respChecked": {
+      "text": "Checked."
+    },
+    "respOn": {
+      "text": "On."
+    },
+    "respSet": {
+      "text": "Set."
+    },
+    "respSetBoth": {
+      "text": "Set, both."
+    },
+    "pleaseCheck": {
+      "text": "Please check, I see a discrepancy."
+    }
   }
 }

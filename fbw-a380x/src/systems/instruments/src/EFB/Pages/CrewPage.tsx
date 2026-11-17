@@ -7,10 +7,14 @@ import { Link } from 'react-router-dom';
 import { NXDataStore, PilotSeat } from '@flybywiresim/fbw-sdk';
 import { usePersistentProperty, useSimVar } from '@flybywiresim/fbw-sdk-react';
 import { SimpleInput } from '@flybywiresim/flypad';
+import { useArinc429Var } from '@instruments/common/arinc429';
 import {
   VIRTUAL_CREW_PREFLIGHT_ACCELERATION,
   VIRTUAL_CREW_PREFLIGHT_DURATION_S,
   VirtualCrewBriefingFields,
+  VirtualCrewButtonLocalVars,
+  VirtualCrewChecklists,
+  VirtualCrewChecklistStep,
   VirtualCrewCommand,
   VirtualCrewCommandLocalVar,
   VirtualCrewDefaults,
@@ -20,6 +24,61 @@ import {
   VirtualCrewStatusLocalVars,
   VirtualCrewWorkflows,
 } from '../../../../shared/src/VirtualCrew';
+
+const ChecklistStepText: Partial<Record<VirtualCrewChecklistStep, string>> = {
+  [VirtualCrewChecklistStep.Opening]: 'activating the checklist on the ECL',
+  [VirtualCrewChecklistStep.Reading]: 'reading',
+  [VirtualCrewChecklistStep.AwaitingResponse]: 'waiting for your response',
+  [VirtualCrewChecklistStep.Discrepancy]: 'discrepancy, check and respond again',
+  [VirtualCrewChecklistStep.Checking]: 'checking the item',
+  [VirtualCrewChecklistStep.Completing]: 'completing the checklist',
+};
+
+/** State of the checklists: the checklist being read, or the one which can be requested */
+const ChecklistStatus: FC<{
+  available: number;
+  running: number;
+  item: number;
+  step: VirtualCrewChecklistStep;
+  onRequest: () => void;
+  onRespond: () => void;
+}> = ({ available, running, item, step, onRequest, onRespond }) => {
+  const runningChecklist = running > 0 ? VirtualCrewChecklists[running - 1] : undefined;
+  const availableChecklist = available > 0 ? VirtualCrewChecklists[available - 1] : undefined;
+  const awaitingResponse =
+    step === VirtualCrewChecklistStep.AwaitingResponse || step === VirtualCrewChecklistStep.Discrepancy;
+
+  if (runningChecklist) {
+    return (
+      <div className="mt-3 flex flex-row items-center justify-between">
+        <div className="text-xl">
+          <p className="text-theme-highlight">{runningChecklist.name.toUpperCase()} C/L</p>
+          <p>
+            {runningChecklist.items[item] ?? ''}
+            <span
+              className={
+                step === VirtualCrewChecklistStep.Discrepancy ? ' text-utility-amber' : ' text-theme-unselected'
+              }
+            >
+              {' - '}
+              {ChecklistStepText[step] ?? ''}
+            </span>
+          </p>
+        </div>
+        {awaitingResponse && <ActionButton onClick={onRespond}>Respond</ActionButton>}
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 flex flex-row items-center justify-between">
+      {step === VirtualCrewChecklistStep.Failed && (
+        <p className="text-xl text-utility-amber">ECL not available, request the checklist again</p>
+      )}
+      {availableChecklist && <ActionButton onClick={onRequest}>{availableChecklist.name} checklist</ActionButton>}
+    </div>
+  );
+};
 
 /**
  * Formats a duration as minutes and seconds
@@ -60,25 +119,65 @@ const ActionButton: FC<{ onClick: () => void; disabled?: boolean; className?: st
   </button>
 );
 
-/** A briefing value stored per flight in the persistent storage */
-const BriefingField: FC<{ storageKey: string; label: string; placeholder: string; disabled: boolean }> = ({
-  storageKey,
-  label,
-  placeholder,
-  disabled,
-}) => {
+/** Takeoff configuration of the FMS: FM1 discrete word 2, bits 13 to 16 for CONF 0, 1+F, 2 and 3 */
+const TAKEOFF_FLAPS_BITS: [number, string][] = [
+  [13, '0'],
+  [14, '1+F'],
+  [15, '2'],
+  [16, '3'],
+];
+
+/**
+ * Takeoff data of the FMGS used as default values of the briefing
+ * @returns the takeoff thrust and flaps, empty if not available
+ */
+const useFmsTakeoffDefaults = (): Record<'takeoffThrust' | 'takeoffFlaps', string> => {
+  const [flex] = useSimVar('L:A32NX_AIRLINER_TO_FLEX_TEMP', 'number', 1000);
+  const [v1] = useSimVar('L:AIRLINER_V1_SPEED', 'knots', 1000);
+  const fmDiscreteWord2 = useArinc429Var('L:A32NX_FM1_DISCRETE_WORD_2', 1000);
+
+  // the FMS stores 0.1 for a FLEX temperature of 0, 0 means no FLEX temperature
+  let takeoffThrust = '';
+  if (flex > 0) {
+    takeoffThrust = `FLEX ${Math.round(flex)}`;
+  } else if (v1 > 0) {
+    takeoffThrust = 'TOGA';
+  }
+
+  const flaps = fmDiscreteWord2.isNormalOperation()
+    ? TAKEOFF_FLAPS_BITS.find(([bit]) => fmDiscreteWord2.bitValueOr(bit, false))
+    : undefined;
+
+  return { takeoffThrust, takeoffFlaps: flaps ? flaps[1] : '' };
+};
+
+/**
+ * A briefing value stored per flight in the persistent storage. A value of the FMGS is used as long as the pilot does
+ * not enter another one, clearing the entry returns to the value of the FMGS.
+ */
+const BriefingField: FC<{
+  storageKey: string;
+  label: string;
+  placeholder: string;
+  disabled: boolean;
+  fmsValue?: string;
+}> = ({ storageKey, label, placeholder, disabled, fmsValue }) => {
   const [value, setValue] = usePersistentProperty(storageKey, '');
+  const fromFms = value === '' && !!fmsValue;
 
   return (
-    <div className="flex flex-row items-center justify-between py-2">
-      <span className="text-2xl">{label}</span>
+    <div className="flex flex-row items-center justify-between py-1">
+      <span className="text-xl">
+        {label}
+        {fromFms && <span className="ml-3 text-lg text-theme-highlight">FMS</span>}
+      </span>
       <SimpleInput
         className="w-96"
-        value={value}
+        value={fromFms ? fmsValue : value}
         placeholder={placeholder}
         uppercase
         disabled={disabled}
-        onChange={(newValue) => setValue(newValue)}
+        onChange={(newValue) => setValue(newValue === fmsValue ? '' : newValue)}
       />
     </div>
   );
@@ -89,7 +188,6 @@ const FmsTakeoffData: FC = () => {
   const [v1] = useSimVar('L:AIRLINER_V1_SPEED', 'knots', 1000);
   const [vr] = useSimVar('L:AIRLINER_VR_SPEED', 'knots', 1000);
   const [v2] = useSimVar('L:AIRLINER_V2_SPEED', 'knots', 1000);
-  const [flex] = useSimVar('L:A32NX_AIRLINER_TO_FLEX_TEMP', 'number', 1000);
 
   const speed = (value: number) => (value > 0 ? Math.round(value).toString() : '---');
 
@@ -97,12 +195,10 @@ const FmsTakeoffData: FC = () => {
     ['V1', speed(v1)],
     ['VR', speed(vr)],
     ['V2', speed(v2)],
-    // 0.1 is used by the FMS for a FLEX temperature of 0
-    ['FLEX', flex > 0 ? `${Math.round(flex)}°C` : 'TOGA'],
   ];
 
   return (
-    <div className="mb-4 flex flex-row justify-between rounded-md bg-theme-accent px-6 py-3">
+    <div className="mb-2 flex flex-row justify-between rounded-md bg-theme-accent px-6 py-2">
       {items.map(([label, value]) => (
         <span key={label} className="text-2xl">
           <span className="text-theme-unselected">{label} </span>
@@ -162,7 +258,13 @@ export const CrewPage: FC = () => {
   const [accelerated] = useSimVar(VirtualCrewStatusLocalVars.Accelerated, 'number', 250);
   const [workflow] = useSimVar(VirtualCrewStatusLocalVars.Workflow, 'number', 250);
   const [briefingDone] = useSimVar(VirtualCrewStatusLocalVars.BriefingDone, 'number', 250);
+  const [checklistAvailable] = useSimVar(VirtualCrewStatusLocalVars.ChecklistAvailable, 'number', 250);
+  const [checklistRunning] = useSimVar(VirtualCrewStatusLocalVars.ChecklistRunning, 'number', 250);
+  const [checklistItem] = useSimVar(VirtualCrewStatusLocalVars.ChecklistItem, 'number', 250);
+  const [checklistStep] = useSimVar(VirtualCrewStatusLocalVars.ChecklistStep, 'number', 250);
+  const [, pressPrimary] = useSimVar(VirtualCrewButtonLocalVars.Primary, 'number');
   const [pilotSeat] = useSimVar('L:FBW_PILOT_SEAT', 'enum', 1000);
+  const fmsDefaults = useFmsTakeoffDefaults();
   const [, sendCommand] = useSimVar(VirtualCrewCommandLocalVar, 'number');
 
   if (enabled !== '1') {
@@ -199,26 +301,36 @@ export const CrewPage: FC = () => {
 
   return (
     <div>
-      <h1 className="mb-4 font-bold">Crew</h1>
+      <div className="mb-4 flex flex-row items-center justify-between">
+        <h1 className="font-bold">Crew</h1>
+        {currentPhase !== VirtualCrewFlightPhase.Idle && (
+          <ActionButton
+            className="!py-1"
+            onClick={() => {
+              sendCommand(VirtualCrewCommand.Reset);
+              clearBriefing();
+            }}
+          >
+            End flight
+          </ActionButton>
+        )}
+      </div>
 
       <div className="flex flex-row space-x-6">
         <div className="flex w-2/5 flex-col space-y-6">
           <Card title="Flight phase">
             <p className="text-3xl text-theme-highlight">{VirtualCrewFlightPhaseNames[currentPhase] ?? 'Unknown'}</p>
-            <p className="mt-3 text-2xl">
+            <p className="mt-2 text-2xl">
               {runningWorkflow ? `${runningWorkflow.seat}: ${runningWorkflow.name}` : 'No crew member busy'}
             </p>
-            {currentPhase !== VirtualCrewFlightPhase.Idle && (
-              <ActionButton
-                className="mt-4"
-                onClick={() => {
-                  sendCommand(VirtualCrewCommand.Reset);
-                  clearBriefing();
-                }}
-              >
-                End flight
-              </ActionButton>
-            )}
+            <ChecklistStatus
+              available={checklistAvailable}
+              running={checklistRunning}
+              item={checklistItem}
+              step={checklistStep}
+              onRequest={() => sendCommand(VirtualCrewCommand.RequestChecklist)}
+              onRespond={() => pressPrimary(1)}
+            />
           </Card>
 
           <Card title="Preflight">
@@ -281,10 +393,11 @@ export const CrewPage: FC = () => {
                 label={field.label}
                 placeholder={field.placeholder}
                 disabled={!briefingEditable}
+                fmsValue={field.fmsDefault ? fmsDefaults[field.fmsDefault] : undefined}
               />
             ))}
           </div>
-          <div className="mt-6 flex flex-row justify-end">
+          <div className="mt-3 flex flex-row justify-end">
             {isBriefingDone ? (
               <span className="rounded-md border-2 border-utility-green px-5 py-3 text-2xl text-utility-green">
                 Takeoff briefing performed
