@@ -17,7 +17,11 @@ export interface ChecklistItem {
    * monitoring only confirms it on the ECL.
    */
   sensed: boolean;
-  /** Verification of a non sensed item by the pilot monitoring, the item is accepted if not defined */
+  /**
+   * Verification of the item by the pilot monitoring, looking at the cockpit. A non sensed item is accepted if not
+   * defined. A sensed item is accepted when the ECL or this verification shows it, so that a delayed ECL state does
+   * not cause a false discrepancy.
+   */
   verify?: (read: SimVarReader) => boolean;
 }
 
@@ -42,7 +46,13 @@ export const CockpitPreparationChecklist: Checklist = {
   items: [
     { name: 'GEAR PINS & COVERS', challenge: 'clGearPinsAndCovers', response: 'respRemoved', sensed: false },
     { name: 'FUEL QUANTITY', challenge: 'clFuelQuantity', response: 'respChecked', sensed: false },
-    { name: 'SEAT BELTS', challenge: 'clSeatBelts', response: 'respOn', sensed: true },
+    {
+      name: 'SEAT BELTS',
+      challenge: 'clSeatBelts',
+      response: 'respOn',
+      sensed: true,
+      verify: (read) => read('A:CABIN SEATBELTS ALERT SWITCH') === 1,
+    },
     { name: 'BARO REF', challenge: 'clBaroRef', response: 'respSetBoth', sensed: false },
   ],
 };
@@ -69,7 +79,13 @@ export const BeforeStartChecklist: Checklist = {
       verify: (read) =>
         read('L:AIRLINER_V1_SPEED') > 0 && read('L:AIRLINER_VR_SPEED') > 0 && read('L:AIRLINER_V2_SPEED') > 0,
     },
-    { name: 'BEACON', challenge: 'clBeacon', response: 'respOn', sensed: true },
+    {
+      name: 'BEACON',
+      challenge: 'clBeacon',
+      response: 'respOn',
+      sensed: true,
+      verify: (read) => read('A:LIGHT BEACON') === 1,
+    },
   ],
 };
 

@@ -255,6 +255,42 @@ describe('virtual crew checklists', () => {
     expect(speech.slice(-2)).toEqual(['PF:respOn', 'PM:clBaroRef']);
   });
 
+  it('goes on once a discrepancy is corrected, without a new response', () => {
+    vars['L:A32NX_PARK_BRAKE_LEVER_POS'] = 1;
+    collect(runner.start(BeforeStartChecklist, now));
+    run(5);
+    runner.respond(); // parking brake
+    run(5);
+    runner.respond(); // T.O speeds: not inserted
+    run(5);
+    expect(speech.slice(-1)).toEqual(['PM:pleaseCheck']);
+
+    vars['L:AIRLINER_V1_SPEED'] = 140;
+    vars['L:AIRLINER_VR_SPEED'] = 145;
+    vars['L:AIRLINER_V2_SPEED'] = 150;
+    run(5);
+    expect(speech.slice(-1)).toEqual(['PM:clBeacon']);
+  });
+
+  it('accepts a sensed item seen in the cockpit before the ECL shows it', () => {
+    vars['L:A32NX_PARK_BRAKE_LEVER_POS'] = 1;
+    vars['L:AIRLINER_V1_SPEED'] = 140;
+    vars['L:AIRLINER_VR_SPEED'] = 145;
+    vars['L:AIRLINER_V2_SPEED'] = 150;
+    // the beacon is on, the ECL state is not updated yet
+    vars['A:LIGHT BEACON'] = 1;
+    collect(runner.start(BeforeStartChecklist, now));
+    run(5);
+    runner.respond(); // parking brake
+    run(5);
+    runner.respond(); // T.O speeds
+    run(5);
+    runner.respond(); // beacon
+    run(5);
+    expect(speech).not.toContain('PM:pleaseCheck');
+    expect(speech.slice(-2)).toEqual(['PF:respOn', 'PM:beforeStartChecklistComplete']);
+  });
+
   it('verifies the non sensed items it can see', () => {
     collect(runner.start(BeforeStartChecklist, now));
     run(5);

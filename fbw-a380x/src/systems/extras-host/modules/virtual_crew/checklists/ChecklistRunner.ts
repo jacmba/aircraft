@@ -49,7 +49,8 @@ export interface ChecklistOutput {
  * 2. for each item, the pilot monitoring reads the challenge and waits for the response of the pilot flying
  *    (primary button)
  * 3. the pilot monitoring verifies the item: a sensed item must be checked by the FWS, a non sensed item is verified
- *    when possible. On a discrepancy, the pilot monitoring asks to check and waits for a new response
+ *    when possible. On a discrepancy, the pilot monitoring asks to check and waits for a new response, or goes on
+ *    once they see the item corrected
  * 4. the pilot monitoring checks the item on the ECL, then completes the checklist (C/L COMPLETE)
  *
  * The ECL is operated in a closed loop: at most one button is pressed per step, after which the published ECL state
@@ -185,6 +186,13 @@ export class ChecklistRunner {
         this.check(checklist, ecl, now, output);
         break;
 
+      case VirtualCrewChecklistStep.Discrepancy:
+        // the pilot monitoring goes on as soon as they see the item corrected, without a new response
+        if (this.verify(checklist, ecl, read)) {
+          this.enter(VirtualCrewChecklistStep.Checking, now + VERIFY_DELAY_MS);
+        }
+        break;
+
       case VirtualCrewChecklistStep.Completing:
         this.complete(checklist, ecl, now, output);
         break;
@@ -200,7 +208,7 @@ export class ChecklistRunner {
   private verify(checklist: Checklist, ecl: EclState, read: SimVarReader): boolean {
     const item = checklist.items[this.itemIndex];
     if (item.sensed) {
-      return ecl.checklists.get(checklist.eclId)?.itemsChecked[this.itemIndex] === true;
+      return ecl.checklists.get(checklist.eclId)?.itemsChecked[this.itemIndex] === true || item.verify?.(read) === true;
     }
     return item.verify?.(read) ?? true;
   }
