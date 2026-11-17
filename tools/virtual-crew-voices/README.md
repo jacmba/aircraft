@@ -49,8 +49,10 @@ is limited to a few fixed slots, so the phrases are packaged with Wwise, followi
    python tools/virtual-crew-voices/wwise_import.py <folder containing male\ and female\>
    ```
 
-   The events are named `Play_FBW_A380X_VCREW_<sound>` (convention of the SDK), e.g.
-   `Play_FBW_A380X_VCREW_vcrew_male_v_1` for `WwiseEvent="vcrew_male_v_1"` in `sound.xml`.
+   The events are named `Play_Asobo_A320_NEO_<sound>`, e.g. `Play_Asobo_A320_NEO_vcrew_male_v_1` for
+   `WwiseEvent="vcrew_male_v_1"` in `sound.xml`: the simulator prefixes every event with the `MainPackage` of
+   `sound.xml` (`Asobo_A320_NEO` for the A380X), also for the events of an additional package. Events created with
+   another prefix are renamed with `python tools/virtual-crew-voices/wwise_fix_event_names.py`.
    Without WAAPI, the same structure can be created by hand as described in "Setting Up Wwise".
 
    Without a licence key, Wwise runs in trial mode and refuses to generate when the **whole project** has more than

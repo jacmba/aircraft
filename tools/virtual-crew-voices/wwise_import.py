@@ -6,8 +6,9 @@ Imports the voices of the A380X virtual crew into the Wwise sample project of th
 Authoring API (WAAPI), following the SDK documentation "Setting Up Wwise":
 
 - a work unit FBW_A380X_VCREW in the AIRCRAFT_PLAYER folder of the Audio and Events hierarchies
-- one Sound SFX per WAV file and one Play event per sound, named Play_FBW_A380X_VCREW_<sound>
-  (e.g. Play_FBW_A380X_VCREW_vcrew_male_v_1 for the sound.xml entry WwiseEvent="vcrew_male_v_1")
+- one Sound SFX per WAV file and one Play event per sound, named Play_Asobo_A320_NEO_<sound>
+  (e.g. Play_Asobo_A320_NEO_vcrew_male_v_1 for the sound.xml entry WwiseEvent="vcrew_male_v_1"): the simulator
+  prefixes every event with the MainPackage of sound.xml, also for the events of an additional package
 - a SoundBank FBW_A380X_VCREW in the "aircrafts" work unit containing the events, then generated
 
 Requirements (Windows):
@@ -27,6 +28,9 @@ from pathlib import Path
 from waapi import CannotConnectToWaapiException, WaapiClient
 
 BANK = 'FBW_A380X_VCREW'
+# MainPackage of the sound.xml of the A380X, prefix of all its Wwise events
+MAIN_PACKAGE = 'Asobo_A320_NEO'
+EVENT_PREFIX = f'Play_{MAIN_PACKAGE}_'
 
 
 def find_folder(client: WaapiClient, name: str, *hierarchies: str) -> str:
@@ -76,7 +80,7 @@ def main() -> None:
                 'audioFile': str(wav),
                 'objectPath': f'{audio_unit}\\<Sound SFX>{wav.stem}',
                 # the last path element is the name of the event, which plays the imported sound
-                'event': f'{events_unit}\\Play_{BANK}_{wav.stem}',
+                'event': f'{events_unit}\\{EVENT_PREFIX}{wav.stem}',
             }
             for wav in wav_files
         ]
