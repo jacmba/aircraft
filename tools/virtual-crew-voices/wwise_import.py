@@ -75,7 +75,8 @@ def main() -> None:
             {
                 'audioFile': str(wav),
                 'objectPath': f'{audio_unit}\\<Sound SFX>{wav.stem}',
-                'event': f'{events_unit}\\<Event>Play_{BANK}_{wav.stem}',
+                # the last path element is the name of the event, which plays the imported sound
+                'event': f'{events_unit}\\Play_{BANK}_{wav.stem}',
             }
             for wav in wav_files
         ]
