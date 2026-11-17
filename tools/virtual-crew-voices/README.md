@@ -52,6 +52,11 @@ is limited to a few fixed slots, so the phrases are packaged with Wwise, followi
    The events are named `Play_FBW_A380X_VCREW_<sound>` (convention of the SDK), e.g.
    `Play_FBW_A380X_VCREW_vcrew_male_v_1` for `WwiseEvent="vcrew_male_v_1"` in `sound.xml`.
    Without WAAPI, the same structure can be created by hand as described in "Setting Up Wwise".
+
+   Without a licence key, Wwise runs in trial mode and refuses to generate when the **whole project** has more than
+   200 media files; the sample project already has about 720. Until the key is granted, work on a copy of the sample
+   project and remove the sounds of the sample aircraft with `python tools/virtual-crew-voices/wwise_trim_project.py`
+   (it refuses to run on the project inside the SDK folder).
 4. Create the package with `FilePackager.App.exe` of Wwise: File > Open `PCK_PC.wfpproj` of the sample project,
    Add a package named `FBW_A380X_VCREW.PC.PCK`, drag the SoundBank `FBW_A380X_VCREW` into the package contents,
    then Generate > Generate All. The package is written to the `GeneratedSoundBanks` folder of the sample project.
