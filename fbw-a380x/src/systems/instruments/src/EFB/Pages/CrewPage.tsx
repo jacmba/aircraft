@@ -236,8 +236,9 @@ const PreflightSchedule: FC<{ elapsedS: number; runningWorkflowId: string | unde
 
       return (
         <div key={workflow.id} className="flex flex-row items-center justify-between whitespace-nowrap py-1">
-          <span className="w-16 shrink-0 font-mono text-theme-unselected">
-            {formatCountdown(workflow.preflightMinute * 60)}
+          <span className="w-20 shrink-0 font-mono text-theme-unselected">
+            {/* countdown notation, like the preflight timer: T-38:00 for 2 minutes after the start */}
+            {`T-${formatCountdown(VIRTUAL_CREW_PREFLIGHT_DURATION_S - workflow.preflightMinute * 60)}`}
           </span>
           <span className="w-16 shrink-0">{workflow.seat}</span>
           <span className="flex-1 truncate">{workflow.name}</span>

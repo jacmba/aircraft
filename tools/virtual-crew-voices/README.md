@@ -33,14 +33,33 @@ The script downloads the models on first use (to `build/piper-models`) and write
 
 ## Packaging for MSFS
 
-The virtual crew plays the phrases with `PLAY_INSTRUMENT_SOUND`, which requires a Wwise event per phrase:
+The virtual crew plays the phrases with `PLAY_INSTRUMENT_SOUND`, which requires a Wwise event per phrase. The
+instruments of MSFS cannot play audio files directly (HTML audio is not supported) and the WAV support of `sound.xml`
+is limited to a few fixed slots, so the phrases are packaged with Wwise, following the SDK documentation
+"Setting Up Wwise".
 
-1. In Wwise Authoring (the version matching the MSFS SDK), import the WAV files as sounds and create one *Play* event
-   per sound, named like the file without extension (e.g. `vcrew_male_v_1`).
-2. Add the events to a sound bank and generate the package `FBW_A380X_VCREW` with the MSFS SDK sound tools.
-3. Add the package to the `large-files` submodule and reference it in
-   `fbw-a380x/src/base/.../FlyByWire_A380X/common/sound/sound.xml`:
+1. Install the MSFS 2024 SDK and the Wwise version it uses (a free licence for Flight Simulator add-ons is available
+   from Audiokinetic, see "Wwise Licence Information" in the SDK documentation).
+2. Open `\MSFS SDK\Samples\Wwise\WwiseSampleProject` in Wwise and enable WAAPI
+   (Project > User Preferences > Enable Wwise Authoring API).
+3. Import the voices (sounds, Play events and SoundBank `FBW_A380X_VCREW`, then generation):
+
+   ```sh
+   python -m pip install waapi-client
+   python tools/virtual-crew-voices/wwise_import.py <folder containing male\ and female\>
+   ```
+
+   The events are named `Play_FBW_A380X_VCREW_<sound>` (convention of the SDK), e.g.
+   `Play_FBW_A380X_VCREW_vcrew_male_v_1` for `WwiseEvent="vcrew_male_v_1"` in `sound.xml`.
+   Without WAAPI, the same structure can be created by hand as described in "Setting Up Wwise".
+4. Create the package with `FilePackager.App.exe` of Wwise: File > Open `PCK_PC.wfpproj` of the sample project,
+   Add a package named `FBW_A380X_VCREW.PC.PCK`, drag the SoundBank `FBW_A380X_VCREW` into the package contents,
+   then Generate > Generate All. The package is written to the `GeneratedSoundBanks` folder of the sample project.
+5. Copy `FBW_A380X_VCREW.PC.PCK` to
+   `fbw-a380x/src/base/flybywire-aircraft-a380-842/SimObjects/AirPlanes/FlyByWire_A380X/common/sound/` and reference
+   it in `sound.xml` of the same folder:
    - `<AdditionalPackage Name="FBW_A380X_VCREW" />` in `<WwisePackages>`
    - the content of `sound-xml-entries.xml` in `<AvionicSounds>`
+6. Rebuild the aircraft. The phrases must be packaged again whenever they change.
 
 Until the package exists, the virtual crew runs (actions and logic) but stays silent.
