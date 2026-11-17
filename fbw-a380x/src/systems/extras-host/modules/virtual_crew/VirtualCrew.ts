@@ -179,6 +179,7 @@ export class VirtualCrew implements Instrument {
     this.publish(VirtualCrewStatusLocalVars.PreflightRemaining, status.preflightRemainingS);
     this.publish(VirtualCrewStatusLocalVars.Accelerated, status.accelerated ? 1 : 0);
     this.publish(VirtualCrewStatusLocalVars.Workflow, workflowIndex + 1);
+    this.publish(VirtualCrewStatusLocalVars.BriefingDone, status.briefingDone ? 1 : 0);
   }
 
   /** Writes a status local variable when its value changed */
@@ -232,6 +233,9 @@ export class VirtualCrew implements Instrument {
         break;
       case 'SET_LOCAL_VAR':
         SimVar.SetSimVarValue(action.name, SimVarValueType.Number, action.value);
+        break;
+      case 'KEY_EVENT':
+        SimVar.SetSimVarValue(`K:${action.name}`, SimVarValueType.Number, action.value ?? 0);
         break;
       case 'FLAPS_SET': {
         // the flaps lever is moved one detent after the other

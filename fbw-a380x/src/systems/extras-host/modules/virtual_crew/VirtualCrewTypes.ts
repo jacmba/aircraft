@@ -23,7 +23,9 @@ export type CrewAction =
   | { type: 'GEAR_UP' }
   | { type: 'FLAPS_SET'; index: number }
   /** Sets a local variable, e.g. to push a pushbutton of the overhead panel */
-  | { type: 'SET_LOCAL_VAR'; name: string; value: number };
+  | { type: 'SET_LOCAL_VAR'; name: string; value: number }
+  /** Triggers a simulator or aircraft event, e.g. 'A32NX.FCU_FD_PUSH' (without the K: prefix) */
+  | { type: 'KEY_EVENT'; name: string; value?: number };
 
 /** Reads a simulator variable, e.g. 'L:A32NX_EXT_PWR_AVAIL:1' */
 export type SimVarReader = (name: string) => number;

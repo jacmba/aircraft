@@ -4,6 +4,12 @@
 import { describe, expect, it } from 'vitest';
 import { CrewAction, SimVarReader } from '../VirtualCrewTypes';
 import { InitialPowerUpWorkflow } from './InitialPowerUpWorkflow';
+import {
+  FireTestApuStartWorkflow,
+  GlareshieldWorkflow,
+  OverheadPanelWorkflow,
+  PedestalWorkflow,
+} from './PreflightWorkflows';
 import { Workflow } from './Workflow';
 import { WorkflowRunner } from './WorkflowRunner';
 
@@ -26,17 +32,26 @@ function perform(workflow: Workflow, read: SimVarReader): { actions: CrewAction[
 }
 
 const setVars = (actions: CrewAction[]) =>
-  actions.map((action) => (action.type === 'SET_LOCAL_VAR' ? `${action.name}=${action.value}` : action.type));
+  actions.map((action) => {
+    switch (action.type) {
+      case 'SET_LOCAL_VAR':
+        return `${action.name}=${action.value}`;
+      case 'KEY_EVENT':
+        return `K:${action.name}`;
+      default:
+        return action.type;
+    }
+  });
 
 describe('virtual crew workflows', () => {
   it('performs the items at a human pace and one workflow after the other', () => {
     const a: Workflow = {
-      id: 'a',
+      id: 'initialPowerUp',
       seat: 'FO',
       steps: [{ item: 'A', durationMs: 1000, actions: [{ type: 'GEAR_UP' }] }],
     };
     const b: Workflow = {
-      id: 'b',
+      id: 'aircraftStatus',
       seat: 'FO',
       steps: [{ item: 'B', durationMs: 1000, actions: [{ type: 'FLAPS_SET', index: 0 }] }],
     };
@@ -45,9 +60,9 @@ describe('virtual crew workflows', () => {
     runner.start(b, 0);
 
     expect(runner.update(999, () => 0)).toEqual([]);
-    expect(runner.currentWorkflowId).toBe('a');
+    expect(runner.currentWorkflowId).toBe('initialPowerUp');
     expect(runner.update(1000, () => 0)).toEqual([{ type: 'GEAR_UP' }]);
-    expect(runner.currentWorkflowId).toBe('b');
+    expect(runner.currentWorkflowId).toBe('aircraftStatus');
     expect(runner.update(2000, () => 0)).toEqual([{ type: 'FLAPS_SET', index: 0 }]);
     expect(runner.busy).toBe(false);
   });
@@ -76,6 +91,47 @@ describe('virtual crew workflows', () => {
         name.startsWith('L:A32NX_OVHD_ELEC_BAT_') ? 1 : 0,
       );
       expect(actions).toEqual([]);
+    });
+  });
+
+  describe('cockpit preparation (SOP p. 6-17)', () => {
+    it('switches the APU master on and starts the APU', () => {
+      const { actions } = perform(FireTestApuStartWorkflow, () => 0);
+      // the start is only pressed after the master switch, which this test does not simulate
+      expect(setVars(actions)).toEqual(['L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON=1']);
+
+      const masterOn = perform(FireTestApuStartWorkflow, (name) =>
+        name === 'L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON' ? 1 : 0,
+      );
+      expect(setVars(masterOn.actions)).toEqual(['L:A32NX_OVHD_APU_START_PB_IS_ON=1']);
+    });
+
+    it('does not start an APU which is already available', () => {
+      const { actions } = perform(FireTestApuStartWorkflow, (name) =>
+        ['L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON', 'L:A32NX_OVHD_APU_START_PB_IS_AVAILABLE'].includes(name) ? 1 : 0,
+      );
+      expect(actions).toEqual([]);
+    });
+
+    it('sets the recorder and aligns the three IRs in NAV', () => {
+      const { actions } = perform(OverheadPanelWorkflow, () => 0);
+      expect(setVars(actions)).toEqual([
+        'L:A32NX_RCDR_GROUND_CONTROL_ON=1',
+        'L:A32NX_OVHD_ADIRS_IR_1_MODE_SELECTOR_KNOB=1',
+        'L:A32NX_OVHD_ADIRS_IR_2_MODE_SELECTOR_KNOB=1',
+        'L:A32NX_OVHD_ADIRS_IR_3_MODE_SELECTOR_KNOB=1',
+      ]);
+    });
+
+    it('leaves IRs which are already in NAV or ATT', () => {
+      const { actions } = perform(OverheadPanelWorkflow, (name) => (name.includes('ADIRS') ? 2 : 1));
+      expect(actions).toEqual([]);
+    });
+
+    it('sets the parking brake and the flight director', () => {
+      expect(setVars(perform(PedestalWorkflow, () => 0).actions)).toEqual(['L:A32NX_PARK_BRAKE_LEVER_POS=1']);
+      expect(setVars(perform(GlareshieldWorkflow, () => 0).actions)).toEqual(['K:A32NX.FCU_FD_PUSH']);
+      expect(perform(GlareshieldWorkflow, () => 1).actions).toEqual([]);
     });
   });
 });

@@ -135,11 +135,14 @@ export enum VirtualCrewCommand {
   None = 0,
   /** Starts the preflight phase */
   StartPreflight = 1,
-  /** Starts the takeoff briefing, skipping the preflight */
+  /** Starts the takeoff briefing, skipping the preflight (only when no flight is in progress) */
   StartTakeoffBriefing = 2,
   /** Toggles the acceleration of the preflight countdown, only possible while no workflow is running */
   ToggleAcceleration = 3,
-  /** The pilot flying has performed the takeoff briefing */
+  /**
+   * The pilot flying has performed the takeoff briefing. During the preflight the briefing is one of its tasks and does
+   * not end it; when the preflight was skipped, the crew continues with the next SOP chapter.
+   */
   CompleteTakeoffBriefing = 4,
   /** Ends the current flight */
   Reset = 5,
@@ -157,10 +160,27 @@ export const VirtualCrewStatusLocalVars = {
   Accelerated: 'L:A380X_VCREW_ACCELERATED',
   /** Index in {@link VirtualCrewWorkflows} + 1 of the running workflow, 0 if none */
   Workflow: 'L:A380X_VCREW_WORKFLOW',
+  /** 1 if the takeoff briefing has been performed in the current flight */
+  BriefingDone: 'L:A380X_VCREW_BRIEFING_DONE',
 } as const;
 
-/** Workflows of the virtual crew, the order defines the value of {@link VirtualCrewStatusLocalVars.Workflow} */
-export const VirtualCrewWorkflows = [{ id: 'initialPowerUp', name: 'Initial power up', seat: 'FO' }] as const;
+/**
+ * Workflows of the virtual crew, the order defines the value of {@link VirtualCrewStatusLocalVars.Workflow}.
+ * `preflightMinute` is the time after the start of the preflight at which the workflow is performed, following the
+ * order of the SOP chapters "Preliminary Cockpit Preparation" and "Cockpit Preparation". A workflow is only performed
+ * by the virtual crew member: the items of the seat of the user are left to the user.
+ */
+export const VirtualCrewWorkflows = [
+  { id: 'initialPowerUp', name: 'Initial power up', seat: 'FO', preflightMinute: 0 },
+  { id: 'aircraftStatus', name: 'Aircraft status verification', seat: 'CAPT', preflightMinute: 2 },
+  { id: 'fireTestApuStart', name: 'Fire tests and APU start', seat: 'FO', preflightMinute: 4 },
+  { id: 'overheadPanel', name: 'Overhead panel preparation', seat: 'FO', preflightMinute: 8 },
+  { id: 'pedestal', name: 'Main instrument panel and pedestal', seat: 'FO', preflightMinute: 15 },
+  { id: 'glareshield', name: 'Glareshield preparation', seat: 'FO', preflightMinute: 22 },
+  { id: 'fmsCrosscheck', name: 'FMS and AFS CP crosscheck', seat: 'CAPT', preflightMinute: 28 },
+] as const;
+
+export type VirtualCrewWorkflowId = (typeof VirtualCrewWorkflows)[number]['id'];
 
 /**
  * Data of the takeoff briefing which is not available from the FMGS, entered in the flyPad.

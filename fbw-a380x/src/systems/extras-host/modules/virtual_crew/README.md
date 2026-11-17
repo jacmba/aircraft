@@ -17,10 +17,14 @@ controls, or the local variables `L:A380X_VCREW_PRIMARY_BUTTON` / `L:A380X_VCREW
 Each flight phase corresponds to a chapter of the SOP (`VirtualCrewFlightPhase` in `shared/src/VirtualCrew.ts`).
 The phases are managed in the flyPad crew page:
 
-- **Preflight** (optional, 40 minutes): the virtual crew member performs the workflows of their seat. The countdown
-  can be accelerated (x30) by clicking it, but only while no crew member performs a workflow.
-- **Takeoff briefing**: follows the preflight, or is started directly. The flyPad shows the takeoff data of the FMS
-  and collects the briefing data which is not available from the FMGS.
+- **Preflight** (optional, 40 minutes): the virtual crew member performs the workflows of their seat at their
+  scheduled time (`VirtualCrewWorkflows` in `shared/src/VirtualCrew.ts`), the items of the seat of the user are left
+  to the user. The pilot flying performs the takeoff briefing during the preflight, which does not end it: the
+  preflight only ends when the countdown reaches zero. The countdown can be accelerated (x30) by clicking it, but only
+  while no crew member performs a workflow; a workflow starting stops the acceleration.
+- **Takeoff briefing**: without preflight, the flight starts with the takeoff briefing. The flyPad shows the takeoff
+  data of the FMS and collects the briefing data which is not available from the FMGS.
+- **Before pushback or start**: follows the preflight or the takeoff briefing.
 - **Takeoff**: detected from the aircraft, from any ground phase.
 
 The flyPad sends commands with `L:A380X_VCREW_COMMAND` and reads the state from `L:A380X_VCREW_PHASE`,
@@ -46,4 +50,9 @@ The voices are generated with `tools/virtual-crew-voices`, see its README for th
 | Procedure | SOP chapter                                           |
 |-----------|-------------------------------------------------------|
 | Takeoff   | Takeoff: from "TAKEOFF ... ANNOUNCE" to "FLAPS ZERO"  |
-| Initial power up (FO workflow) | Preliminary Cockpit Preparation: "Initial Power Up" (p. 3) |
+| Preflight workflows | Preliminary Cockpit Preparation and Cockpit Preparation (p. 3-17), see `workflows/` |
+
+Items of the workflows are only automated when the cockpit control can be operated reliably through a variable or an
+event (batteries, external power, APU, ADIRS, recorder, parking brake, flight director). The other items take the
+time of the crew member and are marked "(not automated yet)" when they change a setting, e.g. the exterior lights
+and the signs, which use the light and switch templates of the simulator.

@@ -4,11 +4,12 @@
 import React, { FC } from 'react';
 import { Link } from 'react-router-dom';
 
-import { NXDataStore } from '@flybywiresim/fbw-sdk';
+import { NXDataStore, PilotSeat } from '@flybywiresim/fbw-sdk';
 import { usePersistentProperty, useSimVar } from '@flybywiresim/fbw-sdk-react';
 import { SimpleInput } from '@flybywiresim/flypad';
 import {
   VIRTUAL_CREW_PREFLIGHT_ACCELERATION,
+  VIRTUAL_CREW_PREFLIGHT_DURATION_S,
   VirtualCrewBriefingFields,
   VirtualCrewCommand,
   VirtualCrewCommandLocalVar,
@@ -32,8 +33,8 @@ const formatCountdown = (seconds: number): string => {
 };
 
 const Card: FC<{ title: string; className?: string }> = ({ title, className, children }) => (
-  <div className={`rounded-lg border-2 border-theme-accent p-6 ${className ?? ''}`}>
-    <h2 className="mb-4 text-3xl font-bold">{title}</h2>
+  <div className={`rounded-lg border-2 border-theme-accent p-5 ${className ?? ''}`}>
+    <h2 className="mb-3 text-3xl font-bold">{title}</h2>
     {children}
   </div>
 );
@@ -48,9 +49,10 @@ const ActionButton: FC<{ onClick: () => void; disabled?: boolean; className?: st
     type="button"
     disabled={disabled}
     onClick={onClick}
+    // the background is always explicit: Coherent paints buttons light grey by default
     className={`rounded-md border-2 px-5 py-3 text-2xl transition duration-100 ${
       disabled
-        ? 'cursor-not-allowed border-theme-accent text-theme-unselected'
+        ? 'cursor-not-allowed border-theme-accent bg-theme-accent text-theme-unselected'
         : 'border-theme-highlight bg-theme-highlight text-theme-body hover:bg-theme-body hover:text-theme-highlight'
     } ${className ?? ''}`}
   >
@@ -112,6 +114,44 @@ const FmsTakeoffData: FC = () => {
   );
 };
 
+/** Workflows of the preflight with their state, the tasks of the seat of the user are left to the user */
+const PreflightSchedule: FC<{ elapsedS: number; runningWorkflowId: string | undefined; userSeat: 'CAPT' | 'FO' }> = ({
+  elapsedS,
+  runningWorkflowId,
+  userSeat,
+}) => (
+  <div className="mt-2 w-full divide-y divide-theme-accent text-lg">
+    {VirtualCrewWorkflows.map((workflow) => {
+      const own = workflow.seat === userSeat;
+      const started = elapsedS >= workflow.preflightMinute * 60;
+      const running = workflow.id === runningWorkflowId;
+      let state: string;
+      let stateClass: string;
+      if (running) {
+        state = 'IN PROGRESS';
+        stateClass = 'text-theme-highlight';
+      } else if (started) {
+        state = own ? 'YOUR TASK' : 'DONE';
+        stateClass = own ? 'text-utility-amber' : 'text-utility-green';
+      } else {
+        state = own ? 'YOUR TASK' : 'PLANNED';
+        stateClass = own ? 'text-utility-amber' : 'text-theme-unselected';
+      }
+
+      return (
+        <div key={workflow.id} className="flex flex-row items-center justify-between whitespace-nowrap py-1">
+          <span className="w-16 shrink-0 font-mono text-theme-unselected">
+            {formatCountdown(workflow.preflightMinute * 60)}
+          </span>
+          <span className="w-16 shrink-0">{workflow.seat}</span>
+          <span className="flex-1 truncate">{workflow.name}</span>
+          <span className={`w-32 shrink-0 text-right ${stateClass}`}>{state}</span>
+        </div>
+      );
+    })}
+  </div>
+);
+
 /**
  * Page of the flyPad to interact with the virtual crew: flight phase, preflight countdown and takeoff briefing.
  */
@@ -121,6 +161,8 @@ export const CrewPage: FC = () => {
   const [remaining] = useSimVar(VirtualCrewStatusLocalVars.PreflightRemaining, 'number', 100);
   const [accelerated] = useSimVar(VirtualCrewStatusLocalVars.Accelerated, 'number', 250);
   const [workflow] = useSimVar(VirtualCrewStatusLocalVars.Workflow, 'number', 250);
+  const [briefingDone] = useSimVar(VirtualCrewStatusLocalVars.BriefingDone, 'number', 250);
+  const [pilotSeat] = useSimVar('L:FBW_PILOT_SEAT', 'enum', 1000);
   const [, sendCommand] = useSimVar(VirtualCrewCommandLocalVar, 'number');
 
   if (enabled !== '1') {
@@ -144,7 +186,14 @@ export const CrewPage: FC = () => {
   const runningWorkflow = workflow > 0 ? VirtualCrewWorkflows[workflow - 1] : undefined;
   const busy = runningWorkflow !== undefined;
   const isAccelerated = accelerated === 1;
-  const briefingEditable = currentPhase <= VirtualCrewFlightPhase.TakeoffBriefing;
+  const userSeat = pilotSeat === PilotSeat.Right ? 'FO' : 'CAPT';
+  const isBriefingDone = briefingDone === 1;
+  // the briefing belongs to the preflight, or is the first step when the preflight is skipped
+  const briefingPossible =
+    currentPhase === VirtualCrewFlightPhase.Preflight ||
+    currentPhase === VirtualCrewFlightPhase.TakeoffBriefing ||
+    currentPhase === VirtualCrewFlightPhase.BeforeStart;
+  const briefingEditable = currentPhase <= VirtualCrewFlightPhase.BeforeStart;
 
   const clearBriefing = () => VirtualCrewBriefingFields.forEach((field) => NXDataStore.setLegacy(field.key, ''));
 
@@ -161,7 +210,7 @@ export const CrewPage: FC = () => {
             </p>
             {currentPhase !== VirtualCrewFlightPhase.Idle && (
               <ActionButton
-                className="mt-6"
+                className="mt-4"
                 onClick={() => {
                   sendCommand(VirtualCrewCommand.Reset);
                   clearBriefing();
@@ -185,12 +234,13 @@ export const CrewPage: FC = () => {
             )}
 
             {currentPhase === VirtualCrewFlightPhase.Preflight && (
-              <div className="flex flex-col items-center space-y-4">
+              <div className="flex flex-col items-center space-y-2">
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => sendCommand(VirtualCrewCommand.ToggleAcceleration)}
-                  className={`w-full rounded-lg border-4 py-6 font-mono text-8xl ${
+                  // dark background in every state, Coherent paints buttons light grey by default
+                  className={`w-full rounded-lg border-4 bg-theme-body py-2 font-mono text-7xl ${
                     busy
                       ? 'cursor-not-allowed border-theme-accent text-theme-unselected'
                       : isAccelerated
@@ -207,9 +257,11 @@ export const CrewPage: FC = () => {
                     `Accelerated x${VIRTUAL_CREW_PREFLIGHT_ACCELERATION}, click for normal pace`}
                   {!busy && !isAccelerated && `Click to accelerate x${VIRTUAL_CREW_PREFLIGHT_ACCELERATION}`}
                 </p>
-                <ActionButton disabled={busy} onClick={() => sendCommand(VirtualCrewCommand.StartTakeoffBriefing)}>
-                  Start takeoff briefing now
-                </ActionButton>
+                <PreflightSchedule
+                  elapsedS={VIRTUAL_CREW_PREFLIGHT_DURATION_S - remaining}
+                  runningWorkflowId={runningWorkflow?.id}
+                  userSeat={userSeat}
+                />
               </div>
             )}
 
@@ -233,12 +285,18 @@ export const CrewPage: FC = () => {
             ))}
           </div>
           <div className="mt-6 flex flex-row justify-end">
-            <ActionButton
-              disabled={currentPhase !== VirtualCrewFlightPhase.TakeoffBriefing}
-              onClick={() => sendCommand(VirtualCrewCommand.CompleteTakeoffBriefing)}
-            >
-              Takeoff briefing performed
-            </ActionButton>
+            {isBriefingDone ? (
+              <span className="rounded-md border-2 border-utility-green px-5 py-3 text-2xl text-utility-green">
+                Takeoff briefing performed
+              </span>
+            ) : (
+              <ActionButton
+                disabled={!briefingPossible}
+                onClick={() => sendCommand(VirtualCrewCommand.CompleteTakeoffBriefing)}
+              >
+                Perform takeoff briefing
+              </ActionButton>
+            )}
           </div>
         </Card>
       </div>
