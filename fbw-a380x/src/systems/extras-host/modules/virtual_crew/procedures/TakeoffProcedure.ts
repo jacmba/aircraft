@@ -21,6 +21,26 @@ const TAXI_SPEED = 30;
 const FLAPS_ONE = 1;
 const FLAPS_ZERO = 0;
 
+/** Modes of the autothrust of the takeoff on the FMA: MAN TOGA, MAN FLX, MAN DTO */
+const TAKEOFF_AUTOTHRUST_MODES = [1, 3, 4];
+
+/** N1 within this margin of the thrust limit is considered set, in percent */
+const THRUST_SET_N1_MARGIN = 2;
+
+/**
+ * The takeoff thrust is set: the FMA shows the takeoff thrust (MAN FLX or MAN TOGA) and the N1 of every engine reached
+ * the thrust limit. Without the autothrust modes (e.g. A/THR off), the thrust levers in the takeoff position and the
+ * aircraft accelerating.
+ */
+export const takeoffThrustSet = (aircraft: AircraftSnapshot): boolean => {
+  if (aircraft.autothrustMode !== undefined && TAKEOFF_AUTOTHRUST_MODES.includes(aircraft.autothrustMode)) {
+    const limit = aircraft.thrustLimitN1 ?? 0;
+    const n1 = aircraft.n1 ?? [];
+    return limit <= 0 || n1.length === 0 || n1.every((value) => value >= limit - THRUST_SET_N1_MARGIN);
+  }
+  return aircraft.thrustLeversInTakeoffPosition && aircraft.indicatedAirspeed >= THRUST_SET_SPEED;
+};
+
 const takeoffRollStarted = (aircraft: AircraftSnapshot) =>
   aircraft.thrustLeversInTakeoffPosition && aircraft.indicatedAirspeed >= TAKEOFF_ROLL_SPEED;
 
@@ -28,7 +48,7 @@ const takeoffRollStarted = (aircraft: AircraftSnapshot) =>
  * Takeoff and initial climb, FBW A380X SOP (3 DEC 2021), chapter "Takeoff":
  *
  * - PF | TAKEOFF ... ANNOUNCE, PM | LANDING LIGHTS and NOSE LIGHT ... ON / T.O
- * - Before reaching 80 knots: PM | THRUST SET ... ANNOUNCE
+ * - Before reaching 80 knots: PM | THRUST SET ... ANNOUNCE (FMA MAN FLX or MAN TOGA, N1 at the thrust limit)
  * - At 100 knots: PM | ONE HUNDRED KNOTS ... ANNOUNCE
  * - At V1 speed: PM | V1 ... MONITOR or ANNOUNCE
  * - At VR speed: PM | ROTATION ... ORDER
@@ -56,7 +76,7 @@ export const TakeoffProcedure: Procedure = {
     {
       type: 'callout',
       id: 'thrustSet',
-      when: (aircraft) => aircraft.thrustLeversInTakeoffPosition && aircraft.indicatedAirspeed >= THRUST_SET_SPEED,
+      when: takeoffThrustSet,
       skip: (aircraft) => aircraft.indicatedAirspeed >= THRUST_SET_LATEST_SPEED,
       line: 'thrustSet',
     },

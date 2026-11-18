@@ -97,6 +97,12 @@ export interface AircraftSnapshot {
   /** Flaps lever position, 0 = flaps 0, 1 = flaps 1 (1+F), 2, 3, 4 = FULL */
   flapsLeverIndex: number;
 
+  /** Mode of the autothrust shown on the FMA (L:A32NX_AUTOTHRUST_MODE), e.g. 1 MAN TOGA, 3 MAN FLX */
+  autothrustMode?: number;
+  /** N1 of the engines, in percent */
+  n1?: number[];
+  /** N1 of the current thrust limit (FLX or TOGA for the takeoff), in percent, 0 if not available */
+  thrustLimitN1?: number;
   /** Pressure altitude as indicated, in feet. Optional for the takeoff procedure. */
   altitude?: number;
   /** Magnetic heading, in degrees */

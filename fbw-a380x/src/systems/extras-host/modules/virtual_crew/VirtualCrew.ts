@@ -436,6 +436,9 @@ export class VirtualCrew implements Instrument {
       vr: get('L:AIRLINER_VR_SPEED', SimVarValueType.Knots),
       fSpeed: get('L:A32NX_SPEEDS_F'),
       sSpeed: get('L:A32NX_SPEEDS_S'),
+      autothrustMode: get('L:A32NX_AUTOTHRUST_MODE'),
+      n1: [1, 2, 3, 4].map((engine) => get(`L:A32NX_ENGINE_N1:${engine}`)),
+      thrustLimitN1: get('L:A32NX_AUTOTHRUST_THRUST_LIMIT'),
       thrustLeversInTakeoffPosition:
         tla.filter((angle) => angle >= FLX_MCT_DETENT_MIN_TLA).length >= TAKEOFF_THRUST_LEVERS,
       gearLeverUp: get('L:A32NX_GEAR_HANDLE_POSITION') < 0.5,

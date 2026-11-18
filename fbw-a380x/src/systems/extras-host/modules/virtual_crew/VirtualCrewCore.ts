@@ -344,9 +344,15 @@ export class VirtualCrewCore {
       case 'brakeCheck':
         this.output.speech.push(...this.brakeCheck.start());
         break;
-      case 'order':
+      case 'order': {
+        const announcingTakeoff = action.engine === this.takeoff && this.takeoff.nextOrderId === 'announceTakeoff';
         this.add(action.engine.input('PRIMARY', context.aircraft));
+        // the takeoff phase starts with the announcement of the pilot flying
+        if (announcingTakeoff && this.takeoff.nextOrderId !== 'announceTakeoff') {
+          this.phases.enter(VirtualCrewFlightPhase.Takeoff);
+        }
         break;
+      }
       default:
         break;
     }

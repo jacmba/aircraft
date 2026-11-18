@@ -95,6 +95,13 @@ describe('virtual crew - takeoff', () => {
     expect(said(engine.update({ ...roll, indicatedAirspeed: 151 }))).toEqual(['PM:v1', 'PM:rotate']);
   });
 
+  it('announces thrust set from the FMA and the N1 at the thrust limit', () => {
+    engine.input('PRIMARY', lineup);
+    const spoolingUp = aircraft({ autothrustMode: 3, thrustLimitN1: 88, n1: [70, 72, 71, 70], indicatedAirspeed: 20 });
+    expect(said(engine.update(spoolingUp))).toEqual([]);
+    expect(said(engine.update({ ...spoolingUp, n1: [87, 87.5, 88, 86.5] }))).toEqual(['PM:thrustSet']);
+  });
+
   it('does not announce thrust set after 80 kt', () => {
     engine.input('PRIMARY', lineup);
     const roll = aircraft({ thrustLeversInTakeoffPosition: true });

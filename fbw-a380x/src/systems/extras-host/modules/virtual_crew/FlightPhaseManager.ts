@@ -162,6 +162,9 @@ export class FlightPhaseManager {
 
   private approachBriefingDone = false;
 
+  /** The takeoff roll has started in the takeoff phase, the takeoff can be rejected */
+  private takeoffRollSeen = false;
+
   /** Heading at the touchdown, to detect when the aircraft leaves the runway */
   private touchdownHeading: number | undefined;
 
@@ -304,6 +307,7 @@ export class FlightPhaseManager {
       this.preflightRemainingMs = 0;
       this.accelerated = false;
       this.currentPhase = VirtualCrewFlightPhase.Takeoff;
+      this.takeoffRollSeen = context.takeoffRollStarted;
     } else if (
       this.currentPhase === VirtualCrewFlightPhase.Takeoff &&
       context.takeoffProcedureCompleted &&
@@ -330,6 +334,13 @@ export class FlightPhaseManager {
    * @param phase the phase
    */
   public enter(phase: VirtualCrewFlightPhase): void {
+    if (phase === VirtualCrewFlightPhase.Takeoff && this.currentPhase !== phase) {
+      // announced by the pilot flying before the takeoff roll
+      this.runner.cancel();
+      this.preflightRemainingMs = 0;
+      this.accelerated = false;
+      this.takeoffRollSeen = false;
+    }
     this.currentPhase = phase;
   }
 
@@ -364,8 +375,14 @@ export class FlightPhaseManager {
         break;
 
       case VirtualCrewFlightPhase.Takeoff:
-        // rejected takeoff
-        if (context.onGround && !context.takeoffRollStarted && aircraft.groundSpeed < TAXI_SPEED) {
+        this.takeoffRollSeen ||= context.takeoffRollStarted;
+        // rejected takeoff: stopped after the takeoff roll had started
+        if (
+          this.takeoffRollSeen &&
+          context.onGround &&
+          !context.takeoffRollStarted &&
+          aircraft.groundSpeed < TAXI_SPEED
+        ) {
           this.currentPhase = VirtualCrewFlightPhase.BeforeTakeoff;
         }
         break;

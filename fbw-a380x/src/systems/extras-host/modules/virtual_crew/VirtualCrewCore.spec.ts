@@ -241,6 +241,9 @@ describe('virtual crew core, a complete flight', () => {
     actions = [];
     press();
     expect(speech).toContain('PF:takeoff');
+    // the takeoff phase starts with the announcement, also before the takeoff roll
+    run(2);
+    expect(core.phase).toBe(VirtualCrewFlightPhase.Takeoff);
     expect(keyEvents()).toEqual(expect.arrayContaining(['LANDING_LIGHTS_ON:2', 'LANDING_LIGHTS_ON:1']));
 
     // takeoff
