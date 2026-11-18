@@ -26,7 +26,7 @@ for the taxi.
 | Takeoff briefing | flyPad, without preflight | | |
 | Before start | end of the preflight or briefing | transponder AUTO once BEFORE START C/L done and beacon ON | BEFORE START C/L |
 | Engine start | engine mode selector IGN START | callouts: start valve open, fuel flow, engine stable | |
-| After start | engine mode selector NORM | ground spoilers ARM, flaps as briefed, autobrake RTO | AFTER START C/L |
+| After start | engine mode selector NORM | ground spoilers ARM, flaps as briefed, autobrake RTO | AFTER START C/L, then the flight control check: "Flight control check", the PM announces full up/down, left/right, rudder and neutral (secondary button: skip) |
 | Taxi | parking brake released, moving | | TAXI C/L (the PM presses T.O CONFIG), then the line-up flow |
 | Before takeoff | primary button at the holding point | strobe ON, TCAS TA/RA, seat belts double cycle, "Cabin crew, seats for takeoff" | LINE-UP C/L, then "Takeoff" (PM: landing and nose lights) |
 | Takeoff | thrust levers FLX/TOGA | callouts up to positive climb | gear up, flaps 1, flaps 0 |

@@ -175,11 +175,42 @@ describe('virtual crew core, a complete flight', () => {
     vars['L:A32NX_ENGINE_STATE:1'] = 1;
     readChecklist('afterStart');
 
-    // taxi
+    // taxi, flight control check before the taxi checklist
     aircraft.parkingBrakeSet = false;
     aircraft.groundSpeed = 15;
     run(1);
     expect(core.phase).toBe(VirtualCrewFlightPhase.Taxi);
+    expect(core.nextAction).toBe('flightControlCheck');
+    press();
+    expect(speech.slice(-1)).toEqual(['PF:flightControlCheck']);
+    const sweep: [keyof NonNullable<AircraftSnapshot['flightControls']>, number][] = [
+      ['pitch', 1],
+      ['pitch', -1],
+      ['pitch', 0],
+      ['roll', -1],
+      ['roll', 1],
+      ['roll', 0],
+      ['rudder', -1],
+      ['rudder', 1],
+      ['rudder', 0],
+    ];
+    const calls = speech.length;
+    for (const [axis, value] of sweep) {
+      aircraft.flightControls = { pitch: 0, roll: 0, rudder: 0, [axis]: value };
+      run(0.5);
+    }
+    expect(speech.slice(calls)).toEqual([
+      'PM:fullUp',
+      'PM:fullDown',
+      'PM:respNeutral',
+      'PM:fullLeft',
+      'PM:fullRight',
+      'PM:respNeutral',
+      'PM:fullLeft',
+      'PM:fullRight',
+      'PM:respNeutral',
+    ]);
+    expect(core.flightControlCheck.isDone).toBe(true);
     readChecklist('taxi');
 
     // holding point: line-up flow, line-up checklist, takeoff

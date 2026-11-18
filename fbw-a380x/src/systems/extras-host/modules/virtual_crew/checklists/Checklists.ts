@@ -7,6 +7,12 @@ import { AUTOBRAKE_ARMED_MODE_RTO, CockpitControls, CockpitStates } from '../Coc
 import { BriefedAntiIce, BriefingVars } from '../briefing/BriefingData';
 import { autobrakeWords, minimumWords } from '../speech/Phrases';
 
+/** State of the crew read like simulator variables by the verifications of the items */
+export const CrewVars = {
+  /** 1 if the flight control check has been performed in this flight */
+  FlightControlsChecked: 'VCREW:FLIGHT_CONTROLS_CHECKED',
+} as const;
+
 /** An item of a normal checklist of the ECL */
 export interface ChecklistItem {
   /** Item as displayed on the ECL */
@@ -162,7 +168,13 @@ export const TaxiChecklist: Checklist = {
   request: 'taxiChecklist',
   complete: 'taxiChecklistComplete',
   items: [
-    { name: 'FLIGHT CONTROLS', challenge: 'clFlightControls', response: 'respCheckedBoth', sensed: false },
+    {
+      name: 'FLIGHT CONTROLS',
+      challenge: 'clFlightControls',
+      response: 'respCheckedBoth',
+      sensed: false,
+      verify: (read) => read(CrewVars.FlightControlsChecked) === 1,
+    },
     {
       name: 'FLAPS SETTING',
       challenge: 'clFlapsSetting',

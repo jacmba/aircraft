@@ -17,13 +17,14 @@ import { GoAroundProcedure } from './procedures/GoAroundProcedure';
 import { FlightPhaseManager, PreflightEvent } from './FlightPhaseManager';
 import { ChecklistContext, ChecklistManager } from './checklists/ChecklistManager';
 import { ChecklistOutput, EclState, EcpButton } from './checklists/ChecklistRunner';
-import { Checklist } from './checklists/Checklists';
+import { Checklist, CrewVars } from './checklists/Checklists';
 import { FlowManager } from './flows/Flows';
 import { AltitudeMonitor, ApproachMonitor, EngineStartMonitor, RolloutMonitor } from './callouts/CalloutMonitors';
 import { BriefingValues } from './briefing/BriefingData';
 import { approachBriefingSpeech, takeoffBriefingSpeech } from './briefing/BriefingSpeech';
 import { TestActions } from './CockpitControls';
 import { WorkflowRunner } from './workflows/WorkflowRunner';
+import { FlightControlCheck } from './callouts/FlightControlCheck';
 import { Workflow } from './workflows/Workflow';
 
 /** Everything the core needs at each update */
@@ -71,8 +72,10 @@ const SeatBeltsCycleTest: Workflow = {
  * output.
  *
  * The primary button does the next thing of the SOP: respond to the checklist being read, request the available
- * checklist, start the line-up flow at the holding point, or give the next order (takeoff, gear up, flaps, ...).
- * The secondary button stops the checklist, rejects the takeoff before V1 or skips the pending order.
+ * checklist, start the flight control check after the after start checklist, start the line-up flow at the holding
+ * point, or give the next order (takeoff, gear up, flaps, ...).
+ * The secondary button stops the checklist or the flight control check, rejects the takeoff before V1 or skips the
+ * pending order.
  */
 export class VirtualCrewCore {
   public readonly phases: FlightPhaseManager;
@@ -96,6 +99,8 @@ export class VirtualCrewCore {
   private readonly rolloutMonitor = new RolloutMonitor();
 
   private readonly testRunner = new WorkflowRunner();
+
+  public readonly flightControlCheck = new FlightControlCheck();
 
   private previousPhase = VirtualCrewFlightPhase.Idle;
 
@@ -223,7 +228,13 @@ export class VirtualCrewCore {
         approachBriefingDone: this.phases.status.approachBriefingDone,
       }),
     );
-    VirtualCrewCore.merge(this.output, this.checklists.update(context.now, context.ecl, context.read));
+    this.output.speech.push(
+      ...this.flightControlCheck.update(aircraft.flightControls ?? { pitch: 0, roll: 0, rudder: 0 }),
+    );
+    // the pilot monitoring also verifies the items with the state of the crew
+    const read: SimVarReader = (name) =>
+      name === CrewVars.FlightControlsChecked ? (this.flightControlCheck.isDone ? 1 : 0) : context.read(name);
+    VirtualCrewCore.merge(this.output, this.checklists.update(context.now, context.ecl, read));
     this.add(this.testRunner.update(context.now, context.read));
 
     const monitorContext = { now: context.now, phase: this.phase, aircraft };
@@ -253,6 +264,8 @@ export class VirtualCrewCore {
         return `checklist_${action.checklist.id}` as VirtualCrewNextActionId;
       case 'lineUpFlow':
         return 'lineUpFlow';
+      case 'flightControlCheck':
+        return 'flightControlCheck';
       case 'order': {
         const id = action.engine.nextOrderId;
         return VirtualCrewNextActions.find((next) => next.id === id)?.id ?? 'none';
@@ -278,6 +291,14 @@ export class VirtualCrewCore {
       return;
     }
 
+    if (this.flightControlCheck.isRunning) {
+      // the pilot monitoring watches the flight controls, the secondary button ends the check
+      if (input === 'SECONDARY') {
+        this.flightControlCheck.skip();
+      }
+      return;
+    }
+
     if (input === 'SECONDARY') {
       const engine = this.activeEngine();
       if (engine) {
@@ -298,6 +319,9 @@ export class VirtualCrewCore {
       case 'lineUpFlow':
         this.phases.enter(VirtualCrewFlightPhase.BeforeTakeoff);
         this.flows.start('lineUpFlow', context.now);
+        break;
+      case 'flightControlCheck':
+        this.output.speech.push(...this.flightControlCheck.start());
         break;
       case 'order':
         this.add(action.engine.input('PRIMARY', context.aircraft));
@@ -338,11 +362,23 @@ export class VirtualCrewCore {
   ):
     | { kind: 'checklist'; checklist: Checklist }
     | { kind: 'lineUpFlow' }
+    | { kind: 'flightControlCheck' }
     | { kind: 'order'; engine: VirtualCrewEngine }
     | { kind: 'none' } {
+    if (this.flightControlCheck.isRunning) {
+      return { kind: 'none' };
+    }
     const checklist = this.checklists.available(this.checklistContext(aircraft));
     if (checklist) {
       return { kind: 'checklist', checklist };
+    }
+    // after the after start checklist, before the taxi checklist
+    if (
+      (this.phase === VirtualCrewFlightPhase.AfterStart || this.phase === VirtualCrewFlightPhase.Taxi) &&
+      this.checklists.isDone('afterStart') &&
+      !this.flightControlCheck.isDone
+    ) {
+      return { kind: 'flightControlCheck' };
     }
     if (
       this.phase === VirtualCrewFlightPhase.Taxi &&
@@ -378,6 +414,7 @@ export class VirtualCrewCore {
   }
 
   private resetFlight(): void {
+    this.flightControlCheck.reset();
     this.checklists.reset();
     this.flows.reset();
     this.engineStartMonitor.reset();
@@ -395,6 +432,7 @@ export class VirtualCrewCore {
       briefingDone: this.phases.status.briefingDone,
       isFlowDone: (id) => this.flows.isDone(id as Parameters<FlowManager['isDone']>[0]),
       landingConfiguration: !aircraft.gearLeverUp && aircraft.flapsLeverIndex >= landingFlaps,
+      flightControlsChecked: this.flightControlCheck.isDone,
     };
   }
 

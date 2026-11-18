@@ -386,6 +386,7 @@ export const VirtualCrewNextActions = [
   { id: 'approachFlapsFull', label: 'Flaps full' },
   { id: 'goAroundFlaps', label: 'Go-around, flaps' },
   { id: 'respond', label: 'Respond to the checklist' },
+  { id: 'flightControlCheck', label: 'Flight control check' },
 ] as const;
 
 export type VirtualCrewNextActionId = (typeof VirtualCrewNextActions)[number]['id'];

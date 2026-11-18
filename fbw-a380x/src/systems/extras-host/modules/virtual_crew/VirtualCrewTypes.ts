@@ -125,4 +125,6 @@ export interface AircraftSnapshot {
   glideslopeDots?: number;
   /** Flaps lever position for landing of the approach briefing: 3 or 4 (FULL) */
   briefedLandingFlaps?: number;
+  /** Sidestick and rudder pedals of the pilot flying, -1 to 1 */
+  flightControls?: { pitch: number; roll: number; rudder: number };
 }

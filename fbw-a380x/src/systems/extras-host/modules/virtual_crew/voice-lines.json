@@ -574,6 +574,21 @@
     },
     "alphaZ": {
       "text": "zulu"
+    },
+    "flightControlCheck": {
+      "text": "Flight control check."
+    },
+    "fullUp": {
+      "text": "Full up."
+    },
+    "fullDown": {
+      "text": "Full down."
+    },
+    "fullLeft": {
+      "text": "Full left."
+    },
+    "fullRight": {
+      "text": "Full right."
     }
   }
 }
