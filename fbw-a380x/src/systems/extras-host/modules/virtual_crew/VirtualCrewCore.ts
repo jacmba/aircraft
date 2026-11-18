@@ -53,6 +53,9 @@ export interface CoreOutput {
 /** Speed above which the takeoff roll is considered started, in knots */
 const TAKEOFF_ROLL_SPEED = 30;
 
+/** Ground speed above which the aircraft is on its takeoff roll, whatever the thrust levers (never reached taxiing) */
+const TAKEOFF_ROLL_GROUND_SPEED = 50;
+
 /** Phases of the descent and the approach, in which the approach orders are given */
 const APPROACH_PHASES = [VirtualCrewFlightPhase.Descent, VirtualCrewFlightPhase.Approach];
 
@@ -469,7 +472,9 @@ export class VirtualCrewCore {
       virtualSeat: context.virtualSeat,
       onGround: aircraft.onGround,
       takeoffRollStarted:
-        aircraft.onGround && aircraft.thrustLeversInTakeoffPosition && aircraft.indicatedAirspeed >= TAKEOFF_ROLL_SPEED,
+        aircraft.onGround &&
+        ((aircraft.thrustLeversInTakeoffPosition && aircraft.indicatedAirspeed >= TAKEOFF_ROLL_SPEED) ||
+          aircraft.groundSpeed >= TAKEOFF_ROLL_GROUND_SPEED),
       takeoffProcedureCompleted: this.takeoff.currentState === ProcedureState.Completed,
       crewBusy: this.checklists.runner.running || this.flows.busy,
       aircraft,

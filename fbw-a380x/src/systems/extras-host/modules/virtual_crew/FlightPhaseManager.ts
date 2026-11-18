@@ -120,6 +120,9 @@ const APPROACH_BRIEFING_PHASES = [
   VirtualCrewFlightPhase.Approach,
 ];
 
+/** Radio altitude above which the aircraft is considered airborne in a ground phase, in feet */
+const AIRBORNE_RADIO_ALTITUDE = 50;
+
 /** Ground speed above which the aircraft taxies, in knots */
 const TAXI_SPEED = 3;
 
@@ -294,7 +297,9 @@ export class FlightPhaseManager {
       this.accelerated = false;
     }
 
-    if (GROUND_PHASES_BEFORE_TAKEOFF.includes(this.currentPhase) && context.takeoffRollStarted) {
+    // the takeoff roll, or a flight already in progress when the phases did not follow (e.g. a takeoff not detected)
+    const airborne = !context.onGround && (context.aircraft?.radioAltitude ?? Infinity) > AIRBORNE_RADIO_ALTITUDE;
+    if (GROUND_PHASES_BEFORE_TAKEOFF.includes(this.currentPhase) && (context.takeoffRollStarted || airborne)) {
       this.runner.cancel();
       this.preflightRemainingMs = 0;
       this.accelerated = false;

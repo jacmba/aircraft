@@ -59,8 +59,14 @@ const EcpButtonLocalVars: Record<Exclude<EcpButton, 'CHECK'>, string> = {
 /** Time a momentary button is held, in milliseconds (the FWS and the systems react to the rising edge) */
 const BUTTON_PRESS_MS = 150;
 
-/** Thrust lever angle of the FLX/MCT detent, in degrees */
-const FLX_MCT_DETENT_TLA = 35;
+/**
+ * Lowest thrust lever angle of the FLX/MCT detent, in degrees: the detent is at 35 degrees, the FWS accepts it from
+ * 33.3 degrees (FwsFlightPhases)
+ */
+const FLX_MCT_DETENT_MIN_TLA = 33.3;
+
+/** Number of thrust levers in the takeoff position for a takeoff, as for the FWS */
+const TAKEOFF_THRUST_LEVERS = 2;
 
 /** Interval between two evaluations of the crew, in milliseconds */
 const UPDATE_INTERVAL_MS = 100;
@@ -430,7 +436,8 @@ export class VirtualCrew implements Instrument {
       vr: get('L:AIRLINER_VR_SPEED', SimVarValueType.Knots),
       fSpeed: get('L:A32NX_SPEEDS_F'),
       sSpeed: get('L:A32NX_SPEEDS_S'),
-      thrustLeversInTakeoffPosition: tla.every((angle) => angle >= FLX_MCT_DETENT_TLA),
+      thrustLeversInTakeoffPosition:
+        tla.filter((angle) => angle >= FLX_MCT_DETENT_MIN_TLA).length >= TAKEOFF_THRUST_LEVERS,
       gearLeverUp: get('L:A32NX_GEAR_HANDLE_POSITION') < 0.5,
       flapsLeverIndex: get('L:A32NX_FLAPS_HANDLE_INDEX'),
       altitude: get('INDICATED ALTITUDE', SimVarValueType.Feet),

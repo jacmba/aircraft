@@ -90,7 +90,7 @@ export interface AircraftSnapshot {
   fSpeed: number;
   /** S speed, 0 if not available */
   sSpeed: number;
-  /** True if every thrust lever is at least in the FLX/MCT detent */
+  /** True if the thrust levers are at least in the FLX/MCT detent (two levers at least, as for the FWS) */
   thrustLeversInTakeoffPosition: boolean;
   /** True if the landing gear lever is up */
   gearLeverUp: boolean;

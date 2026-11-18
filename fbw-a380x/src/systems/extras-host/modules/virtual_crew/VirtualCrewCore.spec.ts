@@ -418,6 +418,30 @@ describe('virtual crew core, a complete flight', () => {
     expect(speech.slice(-2)).toEqual(['PF:gearUp', 'PM:gearUp']);
   });
 
+  it('detects the takeoff with the thrust levers slightly below the FLX/MCT detent, or from the ground speed', () => {
+    command(VirtualCrewCommand.StartTakeoffBriefing);
+    command(VirtualCrewCommand.CompleteTakeoffBriefing);
+    Object.assign(aircraft, { parkingBrakeSet: false, groundSpeed: 55, indicatedAirspeed: 55 });
+    run(1);
+    expect(core.phase).toBe(VirtualCrewFlightPhase.Takeoff);
+  });
+
+  it('follows a flight whose takeoff was not detected', () => {
+    command(VirtualCrewCommand.StartTakeoffBriefing);
+    command(VirtualCrewCommand.CompleteTakeoffBriefing);
+    Object.assign(aircraft, {
+      onGround: false,
+      radioAltitude: 30000,
+      altitude: 35000,
+      indicatedAirspeed: 280,
+      gearLeverUp: true,
+      fmgcPhase: FmgcPhase.Cruise,
+    });
+    run(10);
+    expect(core.phase).toBe(VirtualCrewFlightPhase.Cruise);
+    expect(command(VirtualCrewCommand.CompleteApproachBriefing)).toBe(true);
+  });
+
   it('operates the cockpit controls from the test section of the flyPad', () => {
     const index = VirtualCrewTestActions.findIndex((action) => action.id === 'landingLightsOn');
     expect(command(VirtualCrewCommand.TestAction, index)).toBe(true);
