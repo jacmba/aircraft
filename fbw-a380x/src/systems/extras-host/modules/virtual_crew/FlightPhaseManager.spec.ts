@@ -222,7 +222,7 @@ describe('virtual crew flight phases', () => {
     expect(manager.phase).toBe(VirtualCrewFlightPhase.AfterTakeoff);
 
     run(1, { onGround: true });
-    expect(manager.phase).toBe(VirtualCrewFlightPhase.Idle);
+    expect(manager.phase).toBe(VirtualCrewFlightPhase.Landing);
   });
 
   it('starts a new flight from scratch after a reset', () => {

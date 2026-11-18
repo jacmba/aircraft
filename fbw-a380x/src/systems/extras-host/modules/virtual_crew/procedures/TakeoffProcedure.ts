@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { AircraftSnapshot } from '../VirtualCrewTypes';
+import { CockpitControls } from '../CockpitControls';
 import { Procedure } from './Procedure';
 
 /** Speed above which the takeoff roll is considered started, in knots */
@@ -26,7 +27,7 @@ const takeoffRollStarted = (aircraft: AircraftSnapshot) =>
 /**
  * Takeoff and initial climb, FBW A380X SOP (3 DEC 2021), chapter "Takeoff":
  *
- * - PF | TAKEOFF ... ANNOUNCE
+ * - PF | TAKEOFF ... ANNOUNCE, PM | LANDING LIGHTS and NOSE LIGHT ... ON / T.O
  * - Before reaching 80 knots: PM | THRUST SET ... ANNOUNCE
  * - At 100 knots: PM | ONE HUNDRED KNOTS ... ANNOUNCE
  * - At V1 speed: PM | V1 ... MONITOR or ANNOUNCE
@@ -49,6 +50,8 @@ export const TakeoffProcedure: Procedure = {
       // the takeoff was started without the announcement, the crew continues with the callouts
       done: takeoffRollStarted,
       order: 'takeoff',
+      // the pilot monitoring switches the takeoff lights on
+      actions: () => [...CockpitControls.landingLights(true), ...CockpitControls.noseLight('TO')],
     },
     {
       type: 'callout',

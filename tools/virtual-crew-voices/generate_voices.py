@@ -19,8 +19,10 @@ redistribution of the generated audio are used, see VOICES below.
 """
 
 import argparse
+import array
 import json
 import re
+import sys
 import urllib.request
 import wave
 from pathlib import Path
@@ -47,6 +49,34 @@ def event_name(voice: str, line: str) -> str:
     """Wwise event name of a phrase, must match wwiseEventName() in VoicePlayer.ts"""
     snake = re.sub(r'(?<!^)(?=[A-Z0-9])', '_', line).lower()
     return f'vcrew_{voice}_{snake}'
+
+
+# silence kept before and after the speech, so that the parts of a composed phrase ("one" "two" "zero") follow
+# each other naturally
+KEPT_SILENCE_S = 0.03
+# amplitude below which a 16 bit sample is considered silent
+SILENCE_THRESHOLD = 300
+
+
+def trim_silence(path: Path) -> None:
+    """Removes the leading and trailing silence of a 16 bit mono WAV file, keeping KEPT_SILENCE_S"""
+    with wave.open(str(path), 'rb') as wav:
+        params = wav.getparams()
+        samples = array.array('h', wav.readframes(wav.getnframes()))
+    if params.sampwidth != 2 or params.nchannels != 1:
+        return
+    if sys.byteorder == 'big':
+        samples.byteswap()
+    loud = [i for i, sample in enumerate(samples) if abs(sample) > SILENCE_THRESHOLD]
+    if not loud:
+        return
+    margin = int(KEPT_SILENCE_S * params.framerate)
+    trimmed = samples[max(0, loud[0] - margin) : min(len(samples), loud[-1] + margin)]
+    if sys.byteorder == 'big':
+        trimmed.byteswap()
+    with wave.open(str(path), 'wb') as wav:
+        wav.setparams(params)
+        wav.writeframes(trimmed.tobytes())
 
 
 def download_model(model: str, cache: Path) -> Path:
@@ -82,6 +112,7 @@ def main() -> None:
             path = voice_dir / f'{name}.wav'
             with wave.open(str(path), 'wb') as wav:
                 model.synthesize_wav(definition['text'], wav)
+            trim_silence(path)
             with wave.open(str(path), 'rb') as wav:
                 durations[voice][line] = round(wav.getnframes() * 1000 / wav.getframerate())
             sound_entries.append(

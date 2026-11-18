@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { VirtualCrewChecklistStep } from '../../../../shared/src/VirtualCrew';
-import { CrewSpeech, SimVarReader } from '../VirtualCrewTypes';
-import { Checklist } from './Checklists';
+import { CrewAction, CrewSpeech, SimVarReader } from '../VirtualCrewTypes';
+import { Checklist, ChecklistItem } from './Checklists';
 
 /** ID of the first normal checklist of the ECL, the ECL menu lists the checklists by ascending ID */
 const FIRST_ECL_CHECKLIST_ID = 1000001;
@@ -41,7 +41,22 @@ export interface EclState {
 export interface ChecklistOutput {
   speech: CrewSpeech[];
   presses: EcpButton[];
+  /** Actions of the pilot monitoring on the aircraft, e.g. the T.O CONFIG test while reading the item */
+  actions: CrewAction[];
 }
+
+/** Phrases of the response of the pilot flying to an item, which can depend on the aircraft */
+export function itemResponse(item: ChecklistItem, read: SimVarReader): CrewSpeech[] {
+  const lines = typeof item.response === 'function' ? item.response(read) : [item.response];
+  return lines.map((line, i) => ({
+    role: 'PF',
+    line,
+    pauseAfterMs: i < lines.length - 1 ? CHAINED_PAUSE_MS : undefined,
+  }));
+}
+
+/** Pause between the parts of a composed phrase, in milliseconds */
+export const CHAINED_PAUSE_MS = 40;
 
 /**
  * Reads a checklist with the pilot flying, the virtual crew member being the pilot monitoring:
@@ -115,11 +130,11 @@ export class ChecklistRunner {
    */
   public start(checklist: Checklist, now: number): ChecklistOutput {
     this.checklist = checklist;
-    this.itemIndex = 0;
+    this.itemIndex = ChecklistRunner.firstItemFrom(checklist, 0);
     this.pendingResponse = false;
     this.afterOpening = VirtualCrewChecklistStep.Reading;
     this.enter(VirtualCrewChecklistStep.Opening, now + PRESS_INTERVAL_MS);
-    return { speech: [{ role: 'PF', line: checklist.request }], presses: [] };
+    return { speech: [{ role: 'PF', line: checklist.request }], presses: [], actions: [] };
   }
 
   /** Stops reading the current checklist */
@@ -144,7 +159,7 @@ export class ChecklistRunner {
    * @returns the phrases and the presses on the ECAM control panel
    */
   public update(now: number, ecl: EclState, read: SimVarReader): ChecklistOutput {
-    const output: ChecklistOutput = { speech: [], presses: [] };
+    const output: ChecklistOutput = { speech: [], presses: [], actions: [] };
     const checklist = this.checklist;
 
     if (checklist === undefined || !this.running) {
@@ -154,7 +169,7 @@ export class ChecklistRunner {
     // the response is handled right away, the pilot monitoring then takes a moment to verify
     if (this.pendingResponse) {
       this.pendingResponse = false;
-      output.speech.push({ role: 'PF', line: checklist.items[this.itemIndex].response });
+      output.speech.push(...itemResponse(checklist.items[this.itemIndex], read));
       this.enter(VirtualCrewChecklistStep.Checking, now + VERIFY_DELAY_MS);
       this.verifyPending = true;
       return output;
@@ -169,10 +184,15 @@ export class ChecklistRunner {
         this.open(checklist, ecl, now, output);
         break;
 
-      case VirtualCrewChecklistStep.Reading:
-        output.speech.push({ role: 'PM', line: checklist.items[this.itemIndex].challenge });
+      case VirtualCrewChecklistStep.Reading: {
+        const item = checklist.items[this.itemIndex];
+        if (item.challenge !== undefined) {
+          output.speech.push({ role: 'PM', line: item.challenge });
+        }
+        output.actions.push(...(item.actionsWhenRead ?? []));
         this.enter(VirtualCrewChecklistStep.AwaitingResponse, now);
         break;
+      }
 
       case VirtualCrewChecklistStep.Checking:
         if (this.verifyPending) {
@@ -307,8 +327,17 @@ export class ChecklistRunner {
     return false;
   }
 
+  /** Index of the first item to read from the given index, sub headlines are not read */
+  private static firstItemFrom(checklist: Checklist, index: number): number {
+    let i = index;
+    while (i < checklist.items.length && checklist.items[i].headline) {
+      i++;
+    }
+    return i;
+  }
+
   private nextItem(checklist: Checklist, now: number): void {
-    this.itemIndex++;
+    this.itemIndex = ChecklistRunner.firstItemFrom(checklist, this.itemIndex + 1);
     if (this.itemIndex >= checklist.items.length) {
       this.itemIndex = checklist.items.length - 1;
       this.enter(VirtualCrewChecklistStep.Completing, now + NEXT_ITEM_DELAY_MS);

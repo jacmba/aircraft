@@ -10,13 +10,23 @@ import { ChecklistOutput, ChecklistRunner, EclState } from './ChecklistRunner';
 export interface ChecklistContext {
   phase: VirtualCrewFlightPhase;
   briefingDone: boolean;
+  /** True if the flow of the pilot monitoring has been performed */
+  isFlowDone?: (id: string) => boolean;
+  /** The aircraft is configured for landing: landing gear down and flaps in the landing position */
+  landingConfiguration?: boolean;
 }
 
 /**
- * Decides which checklist can be requested and keeps track of the completed checklists of the flight:
- * - the cockpit preparation checklist ("down to the line") once the takeoff briefing has been performed
- * - the before start checklist ("below the line") once the cockpit preparation checklist is completed and the
- *   preflight is over
+ * Decides which checklist can be requested and keeps track of the completed checklists of the flight, in the order of
+ * the SOP:
+ * - COCKPIT PREPARATION ("before start checklist down to the line") once the takeoff briefing has been performed
+ * - BEFORE START ("below the line") once the cockpit preparation checklist is completed and the preflight is over
+ * - AFTER START once the after start flow is performed
+ * - TAXI during the taxi
+ * - LINE-UP at the holding point, once the line-up flow is performed
+ * - APPROACH during the descent or the approach
+ * - LANDING once the approach checklist is completed and the aircraft is configured for landing
+ * - PARKING once the engines are off, SECURING THE AIRCRAFT after the parking checklist
  */
 export class ChecklistManager {
   public readonly runner = new ChecklistRunner();
@@ -66,15 +76,46 @@ export class ChecklistManager {
     this.done.clear();
   }
 
+  /**
+   * The checklist has to be read again, e.g. the landing checklist after a go-around
+   * @param id the checklist
+   */
+  public forget(id: VirtualCrewChecklistId): void {
+    this.done.delete(id);
+  }
+
   private isAvailable(checklist: Checklist, context: ChecklistContext): boolean {
+    const phase = context.phase;
+    const flowDone = (id: string) => context.isFlowDone?.(id) ?? false;
     switch (checklist.id) {
       case 'cockpitPreparation':
         return (
           context.briefingDone &&
-          (context.phase === VirtualCrewFlightPhase.Preflight || context.phase === VirtualCrewFlightPhase.BeforeStart)
+          (phase === VirtualCrewFlightPhase.Preflight || phase === VirtualCrewFlightPhase.BeforeStart)
         );
       case 'beforeStart':
-        return this.done.has('cockpitPreparation') && context.phase === VirtualCrewFlightPhase.BeforeStart;
+        return this.done.has('cockpitPreparation') && phase === VirtualCrewFlightPhase.BeforeStart;
+      case 'afterStart':
+        return (
+          (phase === VirtualCrewFlightPhase.AfterStart || phase === VirtualCrewFlightPhase.Taxi) &&
+          flowDone('afterStartFlow')
+        );
+      case 'taxi':
+        return phase === VirtualCrewFlightPhase.Taxi;
+      case 'lineUp':
+        return phase === VirtualCrewFlightPhase.BeforeTakeoff && flowDone('lineUpFlow');
+      case 'approach':
+        return phase === VirtualCrewFlightPhase.Descent || phase === VirtualCrewFlightPhase.Approach;
+      case 'landing':
+        return (
+          phase === VirtualCrewFlightPhase.Approach &&
+          this.done.has('approach') &&
+          (context.landingConfiguration ?? false)
+        );
+      case 'parking':
+        return phase === VirtualCrewFlightPhase.Parking;
+      case 'securing':
+        return phase === VirtualCrewFlightPhase.Securing && this.done.has('parking');
       default:
         return false;
     }

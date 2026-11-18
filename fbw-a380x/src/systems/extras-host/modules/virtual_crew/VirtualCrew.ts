@@ -15,23 +15,31 @@ import {
   VirtualCrewButtonEvents,
   VirtualCrewButtonLocalVars,
   VirtualCrewChecklists,
-  VirtualCrewChecklistStep,
   VirtualCrewCommand,
   VirtualCrewCommandLocalVar,
+  VirtualCrewCommandParamLocalVar,
   VirtualCrewDefaults,
-  VirtualCrewFlightPhase,
+  VirtualCrewFlows,
+  VirtualCrewNextActions,
+  VirtualCrewPerformedBriefingKeys,
   VirtualCrewSettingKeys,
   VirtualCrewStatusLocalVars,
   VirtualCrewVoices,
   VirtualCrewWorkflows,
 } from '../../../shared/src/VirtualCrew';
-import { ProcedureState, VirtualCrewEngine } from './VirtualCrewEngine';
-import { FlightPhaseContext, FlightPhaseManager } from './FlightPhaseManager';
-import { TakeoffProcedure } from './procedures/TakeoffProcedure';
-import { AircraftSnapshot, CrewAction, CrewInput, CrewOutput, CrewRole, CrewSeat, CrewVoice } from './VirtualCrewTypes';
+import { AircraftSnapshot, CrewAction, CrewRole, CrewSeat, CrewSpeech, CrewVoice } from './VirtualCrewTypes';
 import { VoicePlayer } from './VoicePlayer';
-import { ChecklistContext, ChecklistManager } from './checklists/ChecklistManager';
-import { ChecklistOutput, EclState, EcpButton } from './checklists/ChecklistRunner';
+import { EclState, EcpButton } from './checklists/ChecklistRunner';
+import { CoreContext, CoreOutput, VirtualCrewCore } from './VirtualCrewCore';
+import {
+  BriefingValues,
+  BriefingVars,
+  parseAntiIce,
+  parseAutobrake,
+  parseBriefingValues,
+  parseLandingFlaps,
+  parseTakeoffFlaps,
+} from './briefing/BriefingData';
 
 /** Events of the FWS describing the ECL (see FwsEvents of the EWD) */
 interface FwsEclEvents {
@@ -48,34 +56,35 @@ const EcpButtonLocalVars: Record<Exclude<EcpButton, 'CHECK'>, string> = {
   DOWN: 'L:A32NX_BTN_DOWN',
 };
 
-/** Time an ECAM control panel button is held, in milliseconds (the FWS reacts to the rising edge) */
-const ECP_BUTTON_PRESS_MS = 150;
-
-/** Speed above which the takeoff roll is considered started, in knots */
-const TAKEOFF_ROLL_SPEED = 30;
+/** Time a momentary button is held, in milliseconds (the FWS and the systems react to the rising edge) */
+const BUTTON_PRESS_MS = 150;
 
 /** Thrust lever angle of the FLX/MCT detent, in degrees */
 const FLX_MCT_DETENT_TLA = 35;
 
-/** Interval between two evaluations of the procedures, in milliseconds */
+/** Interval between two evaluations of the crew, in milliseconds */
 const UPDATE_INTERVAL_MS = 100;
 
 /** Delay between two steps of the flaps lever moved by the pilot monitoring, in milliseconds */
 const FLAPS_LEVER_STEP_DELAY_MS = 400;
 
+/** Deviation of one dot of the localizer and of the glideslope, in degrees (as displayed on the PFD) */
+const LOCALIZER_DOT_DEG = 0.8;
+const GLIDESLOPE_DOT_DEG = 0.4;
+
+/** The workflows and flows, in the order of the published workflow index */
+const WORKFLOW_IDS: string[] = [...VirtualCrewWorkflows.map((w) => w.id), ...VirtualCrewFlows.map((f) => f.id)];
+
 /**
  * Virtual crew of the A380X in the button mode: the user is the pilot flying, the virtual crew member the pilot
- * monitoring. The behaviour follows the FBW A380X SOP, see the procedures folder.
+ * monitoring. The behaviour follows the FBW A380X SOP, see {@link VirtualCrewCore}. This module reads the aircraft,
+ * handles the buttons and the commands of the flyPad, executes the actions and plays the phrases.
  *
  * Inputs: the sim events selected as primary and secondary buttons in the flyPad, or the local variables
  * {@link VirtualCrewButtonLocalVars}.
  */
 export class VirtualCrew implements Instrument {
-  private readonly engine = new VirtualCrewEngine(TakeoffProcedure);
-
-  private readonly phases = new FlightPhaseManager();
-
-  private readonly checklists = new ChecklistManager();
+  private readonly core = new VirtualCrewCore();
 
   /** State of the ECL, as published by the FWS */
   private readonly ecl: EclState & {
@@ -112,8 +121,8 @@ export class VirtualCrew implements Instrument {
 
   private secondaryButtonEvent: string = VirtualCrewDefaults.secondaryButtonEvent;
 
-  /** Inputs received since the last update, processed with a consistent aircraft state */
-  private readonly pendingInputs: CrewInput[] = [];
+  /** Briefing data as performed, read when the briefings are performed or the flows need them */
+  private readonly briefings: Record<'takeoff' | 'approach', BriefingValues> = { takeoff: {}, approach: {} };
 
   constructor(private readonly bus: EventBus) {}
 
@@ -147,6 +156,16 @@ export class VirtualCrew implements Instrument {
       VirtualCrewSettingKeys.SecondaryButtonEvent,
       (_, value) => (this.secondaryButtonEvent = value ?? VirtualCrewDefaults.secondaryButtonEvent),
       VirtualCrewDefaults.secondaryButtonEvent,
+    );
+    NXDataStore.getAndSubscribeLegacy(
+      VirtualCrewPerformedBriefingKeys.Takeoff,
+      (_, value) => (this.briefings.takeoff = parseBriefingValues(value)),
+      '{}',
+    );
+    NXDataStore.getAndSubscribeLegacy(
+      VirtualCrewPerformedBriefingKeys.Approach,
+      (_, value) => (this.briefings.approach = parseBriefingValues(value)),
+      '{}',
     );
 
     // the events have no function in the A380X, they are always intercepted and only used if selected
@@ -185,142 +204,70 @@ export class VirtualCrew implements Instrument {
     this.readButtonLocalVars();
 
     if (!this.enabled || SimVar.GetSimVarValue('L:A32NX_IS_READY', SimVarValueType.Number) !== 1) {
-      this.pendingInputs.length = 0;
+      this.core.clearInputs();
       return;
     }
 
-    const aircraft = VirtualCrew.readAircraft();
-
-    for (const input of this.pendingInputs.splice(0)) {
-      if (!this.handleChecklistInput(input, aircraft, now)) {
-        this.execute(this.engine.input(input, aircraft));
-      }
-    }
-    this.execute(this.engine.update(aircraft));
-
-    this.updatePhases(aircraft, now);
-    this.executeChecklist(this.checklists.update(now, this.ecl, VirtualCrew.read));
-  }
-
-  private get checklistContext(): ChecklistContext {
-    return { phase: this.phases.phase, briefingDone: this.phases.status.briefingDone };
-  }
-
-  /**
-   * The buttons first serve the checklists: the primary button requests the available checklist or responds to the
-   * current item, the secondary button stops the checklist being read
-   * @returns true if the input was used by the checklists
-   */
-  private handleChecklistInput(input: CrewInput, aircraft: AircraftSnapshot, now: number): boolean {
-    const runner = this.checklists.runner;
-    if (runner.running) {
-      if (input === 'PRIMARY') {
-        runner.respond();
-      } else {
-        runner.cancel();
-      }
-      return true;
-    }
-
-    if (input === 'PRIMARY' && aircraft.onGround) {
-      const output = this.checklists.request(this.checklistContext, now);
-      if (output) {
-        this.executeChecklist(output);
-        return true;
-      }
-    }
-
-    // no takeoff call during the preparation of the flight
-    const phase = this.phases.phase;
-    return phase === VirtualCrewFlightPhase.Preflight || phase === VirtualCrewFlightPhase.TakeoffBriefing;
-  }
-
-  private executeChecklist(output: ChecklistOutput): void {
-    output.speech.forEach((speech) => this.player.enqueue({ voice: this.voiceOf(speech.role), line: speech.line }));
-    output.presses.forEach((button) => this.pressEcpButton(button));
-  }
-
-  /** Presses a button of the ECAM control panel, the CHECK button on the side of the pilot monitoring */
-  private pressEcpButton(button: EcpButton): void {
-    const name =
-      button === 'CHECK'
-        ? this.virtualSeat === 'FO'
-          ? 'L:A32NX_BTN_CHECK_RH'
-          : 'L:A32NX_BTN_CHECK_LH'
-        : EcpButtonLocalVars[button];
-    SimVar.SetSimVarValue(name, SimVarValueType.Bool, 1);
-    setTimeout(() => SimVar.SetSimVarValue(name, SimVarValueType.Bool, 0), ECP_BUTTON_PRESS_MS);
-  }
-
-  private get virtualSeat(): CrewSeat {
-    return this.pilotSeat.get() === PilotSeat.Right ? 'CAPT' : 'FO';
-  }
-
-  private static read(name: string): number {
-    return SimVar.GetSimVarValue(name, SimVarValueType.Number);
-  }
-
-  private updatePhases(aircraft: AircraftSnapshot, now: number): void {
-    const context: FlightPhaseContext = {
-      // simulation time, so that the preflight does not advance while the simulation is paused
-      now: SimVar.GetSimVarValue('E:SIMULATION TIME', SimVarValueType.Seconds) * 1000,
-      read: VirtualCrew.read,
-      virtualSeat: this.virtualSeat,
-      onGround: aircraft.onGround,
-      takeoffRollStarted:
-        aircraft.onGround && aircraft.thrustLeversInTakeoffPosition && aircraft.indicatedAirspeed >= TAKEOFF_ROLL_SPEED,
-      takeoffProcedureCompleted: this.engine.currentState === ProcedureState.Completed,
-      crewBusy: this.checklists.runner.running,
-    };
+    const context = this.context(now);
 
     const command = SimVar.GetSimVarValue(VirtualCrewCommandLocalVar, SimVarValueType.Number) as VirtualCrewCommand;
     if (command !== VirtualCrewCommand.None) {
       SimVar.SetSimVarValue(VirtualCrewCommandLocalVar, SimVarValueType.Number, VirtualCrewCommand.None);
-      if (command === VirtualCrewCommand.RequestChecklist) {
-        const output = this.checklists.request(this.checklistContext, now);
-        if (output) {
-          this.executeChecklist(output);
-        }
-      } else if (!this.phases.command(command, context)) {
-        console.log(`[VirtualCrew] command ${command} not possible in phase ${this.phases.phase}`);
+      const param = SimVar.GetSimVarValue(VirtualCrewCommandParamLocalVar, SimVarValueType.Number);
+      const output = this.core.command(command, param, context);
+      if (output) {
+        this.execute(output);
+      } else {
+        console.log(`[VirtualCrew] command ${command} not possible in phase ${this.core.phase}`);
       }
     }
 
-    const previousPhase = this.phases.phase;
-    this.phases.update(context).forEach((action) => this.perform(action));
-    if (this.phases.phase === VirtualCrewFlightPhase.Idle && previousPhase !== VirtualCrewFlightPhase.Idle) {
-      // the flight is over or has been ended, the checklists start again with the next flight
-      this.checklists.reset();
-    }
+    this.execute(this.core.update(context));
+    this.publishStatus(context.aircraft);
+  }
 
-    const status = this.phases.status;
-    const workflowIndex = VirtualCrewWorkflows.findIndex((workflow) => workflow.id === status.workflowId);
+  private context(now: number): CoreContext {
+    return {
+      now,
+      // simulation time, so that the preflight does not advance while the simulation is paused
+      simulationTime: SimVar.GetSimVarValue('E:SIMULATION TIME', SimVarValueType.Seconds) * 1000,
+      aircraft: this.readAircraft(),
+      ecl: this.ecl,
+      read: this.read,
+      virtualSeat: this.virtualSeat,
+      readBriefing: (briefing) => this.briefings[briefing],
+    };
+  }
+
+  private publishStatus(aircraft: AircraftSnapshot): void {
+    const core = this.core;
+    const status = core.phases.status;
     this.publish(VirtualCrewStatusLocalVars.Phase, status.phase);
     this.publish(VirtualCrewStatusLocalVars.PreflightRemaining, status.preflightRemainingS);
     this.publish(VirtualCrewStatusLocalVars.Accelerated, status.accelerated ? 1 : 0);
-    this.publish(VirtualCrewStatusLocalVars.Workflow, workflowIndex + 1);
+    this.publish(VirtualCrewStatusLocalVars.Workflow, WORKFLOW_IDS.indexOf(core.currentWorkflowId ?? '') + 1);
     this.publish(VirtualCrewStatusLocalVars.BriefingDone, status.briefingDone ? 1 : 0);
+    this.publish(VirtualCrewStatusLocalVars.ApproachBriefingDone, status.approachBriefingDone ? 1 : 0);
 
-    const runner = this.checklists.runner;
+    const runner = core.checklists.runner;
     const checklistIndex = (id: string | undefined) =>
       VirtualCrewChecklists.findIndex((checklist) => checklist.id === id) + 1;
-    this.publish(
-      VirtualCrewStatusLocalVars.ChecklistAvailable,
-      checklistIndex(this.checklists.available(this.checklistContext)?.id),
-    );
+    this.publish(VirtualCrewStatusLocalVars.ChecklistAvailable, checklistIndex(core.availableChecklist(aircraft)?.id));
     this.publish(VirtualCrewStatusLocalVars.ChecklistRunning, checklistIndex(runner.currentChecklist?.id));
     this.publish(VirtualCrewStatusLocalVars.ChecklistItem, runner.running ? runner.currentItemIndex : -1);
-    this.publish(
-      VirtualCrewStatusLocalVars.ChecklistStep,
-      runner.currentChecklist || runner.currentStep === VirtualCrewChecklistStep.Failed
-        ? runner.currentStep
-        : VirtualCrewChecklistStep.None,
-    );
+    this.publish(VirtualCrewStatusLocalVars.ChecklistStep, core.checklistStep);
     this.publish(
       VirtualCrewStatusLocalVars.ChecklistsDone,
       VirtualCrewChecklists.reduce(
-        (bits, checklist, i) => bits | (this.checklists.isDone(checklist.id) ? 1 << i : 0),
+        (bits, checklist, i) => bits | (core.checklists.isDone(checklist.id) ? 1 << i : 0),
         0,
+      ),
+    );
+    this.publish(
+      VirtualCrewStatusLocalVars.NextAction,
+      Math.max(
+        0,
+        VirtualCrewNextActions.findIndex((action) => action.id === core.nextAction),
       ),
     );
   }
@@ -335,51 +282,115 @@ export class VirtualCrew implements Instrument {
 
   private onKeyIntercepted(data: KeyEventData): void {
     if (data.key === this.primaryButtonEvent) {
-      this.pendingInputs.push('PRIMARY');
+      this.core.input('PRIMARY');
     } else if (data.key === this.secondaryButtonEvent) {
-      this.pendingInputs.push('SECONDARY');
+      this.core.input('SECONDARY');
     }
   }
 
   private readButtonLocalVars(): void {
     if (SimVar.GetSimVarValue(VirtualCrewButtonLocalVars.Primary, SimVarValueType.Number) !== 0) {
       SimVar.SetSimVarValue(VirtualCrewButtonLocalVars.Primary, SimVarValueType.Number, 0);
-      this.pendingInputs.push('PRIMARY');
+      this.core.input('PRIMARY');
     }
     if (SimVar.GetSimVarValue(VirtualCrewButtonLocalVars.Secondary, SimVarValueType.Number) !== 0) {
       SimVar.SetSimVarValue(VirtualCrewButtonLocalVars.Secondary, SimVarValueType.Number, 0);
-      this.pendingInputs.push('SECONDARY');
+      this.core.input('SECONDARY');
     }
   }
 
-  private execute(output: CrewOutput): void {
+  private execute(output: CoreOutput): void {
     // the pilot monitoring acts while confirming the order, or right away without confirmation
     let actionsPending = output.actions.length > 0;
     for (const speech of output.speech) {
       const withActions = actionsPending && speech.role === 'PM';
-      this.player.enqueue({
-        voice: this.voiceOf(speech.role),
-        line: speech.line,
-        onStart: withActions ? () => output.actions.forEach((action) => this.perform(action)) : undefined,
-      });
+      this.enqueue(speech, withActions ? () => output.actions.forEach((action) => this.perform(action)) : undefined);
       actionsPending = actionsPending && !withActions;
     }
     if (actionsPending) {
       output.actions.forEach((action) => this.perform(action));
     }
+    output.presses.forEach((button) => this.pressEcpButton(button));
   }
+
+  private enqueue(speech: CrewSpeech, onStart?: () => void): void {
+    this.player.enqueue({
+      voice: this.voiceOf(speech.role),
+      line: speech.line,
+      pauseAfterMs: speech.pauseAfterMs,
+      onStart,
+    });
+  }
+
+  /** Presses a button of the ECAM control panel, the CHECK button on the side of the pilot monitoring */
+  private pressEcpButton(button: EcpButton): void {
+    const name =
+      button === 'CHECK'
+        ? this.virtualSeat === 'FO'
+          ? 'L:A32NX_BTN_CHECK_RH'
+          : 'L:A32NX_BTN_CHECK_LH'
+        : EcpButtonLocalVars[button];
+    VirtualCrew.pulse(name);
+  }
+
+  private static pulse(name: string): void {
+    SimVar.SetSimVarValue(name, SimVarValueType.Bool, 1);
+    setTimeout(() => SimVar.SetSimVarValue(name, SimVarValueType.Bool, 0), BUTTON_PRESS_MS);
+  }
+
+  private get virtualSeat(): CrewSeat {
+    return this.pilotSeat.get() === PilotSeat.Right ? 'CAPT' : 'FO';
+  }
+
+  /** Reads a simulator variable, or a value of the briefings ({@link BriefingVars}) */
+  private readonly read = (name: string): number => {
+    switch (name) {
+      case BriefingVars.AntiIce:
+        return parseAntiIce(this.briefings.takeoff.A380X_VCREW_BRIEFING_ANTI_ICE);
+      case BriefingVars.TakeoffFlaps:
+        return parseTakeoffFlaps(this.briefings.takeoff.A380X_VCREW_BRIEFING_TO_FLAPS);
+      case BriefingVars.Autobrake:
+        return parseAutobrake(this.briefings.approach.A380X_VCREW_APPR_AUTOBRAKE);
+      case BriefingVars.LandingFlaps:
+        return parseLandingFlaps(this.briefings.approach.A380X_VCREW_APPR_LDG_FLAPS);
+      default:
+        return SimVar.GetSimVarValue(name, SimVarValueType.Number);
+    }
+  };
 
   private perform(action: CrewAction): void {
     switch (action.type) {
       case 'GEAR_UP':
         SimVar.SetSimVarValue('K:GEAR_UP', SimVarValueType.Number, 0);
         break;
+      case 'GEAR_DOWN':
+        SimVar.SetSimVarValue('K:GEAR_DOWN', SimVarValueType.Number, 0);
+        break;
       case 'SET_LOCAL_VAR':
         SimVar.SetSimVarValue(action.name, SimVarValueType.Number, action.value);
+        break;
+      case 'PULSE_LOCAL_VAR':
+        VirtualCrew.pulse(action.name);
         break;
       case 'KEY_EVENT':
         SimVar.SetSimVarValue(`K:${action.name}`, SimVarValueType.Number, action.value ?? 0);
         break;
+      case 'BUS_EVENT':
+        this.bus.getPublisher<Record<string, boolean | number>>().pub(action.topic, action.value, true);
+        break;
+      case 'SEAT_BELTS': {
+        // the switch position and the signs, as the aircraft presets of the flyPad
+        const on = SimVar.GetSimVarValue('A:CABIN SEATBELTS ALERT SWITCH', SimVarValueType.Bool) === 1;
+        SimVar.SetSimVarValue(
+          'L:XMLVAR_SWITCH_OVHD_INTLT_SEATBELT_Position',
+          SimVarValueType.Number,
+          action.on ? 0 : 2,
+        );
+        if (on !== action.on) {
+          SimVar.SetSimVarValue('K:CABIN_SEATBELTS_ALERT_SWITCH_TOGGLE', SimVarValueType.Number, 1);
+        }
+        break;
+      }
       case 'FLAPS_SET': {
         // the flaps lever is moved one detent after the other
         const current = SimVar.GetSimVarValue('L:A32NX_FLAPS_HANDLE_INDEX', SimVarValueType.Number);
@@ -403,24 +414,45 @@ export class VirtualCrew implements Instrument {
     return (VirtualCrewVoices as readonly string[]).includes(value ?? '') ? (value as CrewVoice) : fallback;
   }
 
-  private static readAircraft(): AircraftSnapshot {
-    const tla = [1, 2, 3, 4].map((engine) =>
-      SimVar.GetSimVarValue(`L:A32NX_AUTOTHRUST_TLA:${engine}`, SimVarValueType.Number),
-    );
+  private readAircraft(): AircraftSnapshot {
+    const get = (name: string, unit: string = SimVarValueType.Number) => SimVar.GetSimVarValue(name, unit);
+    const tla = [1, 2, 3, 4].map((engine) => get(`L:A32NX_AUTOTHRUST_TLA:${engine}`));
+    const locValid = get('L:A32NX_RADIO_RECEIVER_LOC_IS_VALID') === 1;
+    const gsValid = get('L:A32NX_RADIO_RECEIVER_GS_IS_VALID') === 1;
 
     return {
-      onGround: SimVar.GetSimVarValue('SIM ON GROUND', SimVarValueType.Bool) === 1,
-      indicatedAirspeed: SimVar.GetSimVarValue('AIRSPEED INDICATED', SimVarValueType.Knots),
-      groundSpeed: SimVar.GetSimVarValue('GROUND VELOCITY', SimVarValueType.Knots),
-      radioAltitude: SimVar.GetSimVarValue('RADIO HEIGHT', SimVarValueType.Feet),
-      verticalSpeed: SimVar.GetSimVarValue('VERTICAL SPEED', SimVarValueType.FPM),
-      v1: SimVar.GetSimVarValue('L:AIRLINER_V1_SPEED', SimVarValueType.Knots),
-      vr: SimVar.GetSimVarValue('L:AIRLINER_VR_SPEED', SimVarValueType.Knots),
-      fSpeed: SimVar.GetSimVarValue('L:A32NX_SPEEDS_F', SimVarValueType.Number),
-      sSpeed: SimVar.GetSimVarValue('L:A32NX_SPEEDS_S', SimVarValueType.Number),
+      onGround: get('SIM ON GROUND', SimVarValueType.Bool) === 1,
+      indicatedAirspeed: get('AIRSPEED INDICATED', SimVarValueType.Knots),
+      groundSpeed: get('GROUND VELOCITY', SimVarValueType.Knots),
+      radioAltitude: get('RADIO HEIGHT', SimVarValueType.Feet),
+      verticalSpeed: get('VERTICAL SPEED', SimVarValueType.FPM),
+      v1: get('L:AIRLINER_V1_SPEED', SimVarValueType.Knots),
+      vr: get('L:AIRLINER_VR_SPEED', SimVarValueType.Knots),
+      fSpeed: get('L:A32NX_SPEEDS_F'),
+      sSpeed: get('L:A32NX_SPEEDS_S'),
       thrustLeversInTakeoffPosition: tla.every((angle) => angle >= FLX_MCT_DETENT_TLA),
-      gearLeverUp: SimVar.GetSimVarValue('L:A32NX_GEAR_HANDLE_POSITION', SimVarValueType.Number) < 0.5,
-      flapsLeverIndex: SimVar.GetSimVarValue('L:A32NX_FLAPS_HANDLE_INDEX', SimVarValueType.Number),
+      gearLeverUp: get('L:A32NX_GEAR_HANDLE_POSITION') < 0.5,
+      flapsLeverIndex: get('L:A32NX_FLAPS_HANDLE_INDEX'),
+      altitude: get('INDICATED ALTITUDE', SimVarValueType.Feet),
+      heading: get('PLANE HEADING DEGREES MAGNETIC', SimVarValueType.Degree),
+      fmgcPhase: get('L:A32NX_FMGC_FLIGHT_PHASE'),
+      parkingBrakeSet: get('L:A32NX_PARK_BRAKE_LEVER_POS') === 1,
+      groundSpoilersArmed: get('L:A32NX_SPOILERS_ARMED') === 1,
+      groundSpoilersExtended: get('L:A32NX_SPOILERS_HANDLE_POSITION') > 0.9,
+      reversersDeployed: get('L:A32NX_REVERSER_2_DEPLOYED') === 1 && get('L:A32NX_REVERSER_3_DEPLOYED') === 1,
+      autobrakeDecel: get('L:A32NX_AUTOBRAKES_DECEL_LIGHT') === 1,
+      engineModeSelectorStart: [1, 2, 3, 4].some((engine) => get(`A:TURB ENG IGNITION SWITCH EX1:${engine}`) === 2),
+      engines: [1, 2, 3, 4].map((engine) => ({
+        state: get(`L:A32NX_ENGINE_STATE:${engine}`),
+        starterValveOpen: get(`L:A32NX_PNEU_ENG_${engine}_STARTER_VALVE_OPEN`) === 1,
+        fuelFlow: get(`L:A32NX_ENGINE_FF:${engine}`),
+      })),
+      vfeNext: get('L:A32NX_SPEEDS_VFEN'),
+      vapp: get('L:A32NX_SPEEDS_VAPP'),
+      fcuAltitude: get('L:A32NX_FCU_AFS_DISPLAY_ALT_VALUE'),
+      localizerDots: locValid ? get('L:A32NX_RADIO_RECEIVER_LOC_DEVIATION') / LOCALIZER_DOT_DEG : undefined,
+      glideslopeDots: gsValid ? get('L:A32NX_RADIO_RECEIVER_GS_DEVIATION') / GLIDESLOPE_DOT_DEG : undefined,
+      briefedLandingFlaps: this.read(BriefingVars.LandingFlaps),
     };
   }
 }

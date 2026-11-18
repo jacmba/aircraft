@@ -3,71 +3,83 @@
 A virtual crew member following the FBW A380X SOP, in a button mode: the user is the pilot flying (PF) in the seat
 of the camera, the virtual crew member is the pilot monitoring (PM).
 
-- The PM makes the SOP callouts automatically (e.g. "Thrust set", "One hundred knots", "V1", "Rotate").
-- The PF gives the orders with the **primary button** (e.g. "Gear up"). The PM executes them and confirms.
+- The PM performs the flows of the SOP, makes the callouts (e.g. "Thrust set", "V1", "Positive climb",
+  "Localizer alive", "One thousand to go", "Reverse green") and reads the checklists of the ECL.
+- The **primary button** does the next thing of the SOP, shown on the Crew page of the flyPad: respond to the
+  checklist item, request the available checklist, start the line-up flow at the holding point, or give the next
+  order (e.g. "Takeoff", "Gear up", "Flaps one", "Gear down", "Go around, flaps"). The PM executes and confirms.
   Orders the PF executed manually are skipped.
-- The **secondary button** rejects the takeoff ("Stop") during the takeoff roll before V1, otherwise it skips the
-  pending order.
+- The **secondary button** stops the checklist being read, rejects the takeoff ("Stop") before V1, otherwise skips
+  the pending order.
 
 The buttons are sim events selected in the flyPad (Settings > Virtual Crew) and bound to a controller in the MSFS
 controls, or the local variables `L:A380X_VCREW_PRIMARY_BUTTON` / `L:A380X_VCREW_SECONDARY_BUTTON` (write 1).
 
-## Flight phases
+The items of the captain are left to the user: APU, FMS, seat belts signs, anti ice, nose and runway turnoff lights
+for the taxi.
 
-Each flight phase corresponds to a chapter of the SOP (`VirtualCrewFlightPhase` in `shared/src/VirtualCrew.ts`).
-The phases are managed in the flyPad crew page:
+## A flight
 
-- **Preflight** (optional, 40 minutes): the virtual crew member performs the workflows of their seat at their
-  scheduled time (`VirtualCrewWorkflows` in `shared/src/VirtualCrew.ts`), the items of the seat of the user are left
-  to the user. The pilot flying performs the takeoff briefing during the preflight, which does not end it: the
-  preflight only ends when the countdown reaches zero. The countdown can be accelerated (x30) by clicking it, but only
-  while no crew member performs a workflow; a workflow starting stops the acceleration.
-- **Takeoff briefing**: without preflight, the flight starts with the takeoff briefing. The flyPad shows the takeoff
-  data of the FMS and collects the briefing data which is not available from the FMGS.
-- **Before pushback or start**: follows the preflight or the takeoff briefing.
-- **Takeoff**: detected from the aircraft, from any ground phase.
+| Phase (SOP chapter) | Started by | PM flow (automatic) | Primary button |
+|---------------------|------------|---------------------|----------------|
+| Preflight (optional, 40 min) | flyPad | workflows of the PM seat, at their time | COCKPIT PREPARATION C/L after the takeoff briefing |
+| Takeoff briefing | flyPad, without preflight | | |
+| Before start | end of the preflight or briefing | transponder AUTO once BEFORE START C/L done and beacon ON | BEFORE START C/L |
+| Engine start | engine mode selector IGN START | callouts: start valve open, fuel flow, engine stable | |
+| After start | engine mode selector NORM | ground spoilers ARM, flaps as briefed, autobrake RTO | AFTER START C/L |
+| Taxi | parking brake released, moving | | TAXI C/L (the PM presses T.O CONFIG), then the line-up flow |
+| Before takeoff | primary button at the holding point | strobe ON, TCAS TA/RA, seat belts double cycle, "Cabin crew, seats for takeoff" | LINE-UP C/L, then "Takeoff" (PM: landing and nose lights) |
+| Takeoff | thrust levers FLX/TOGA | callouts up to positive climb | gear up, flaps 1, flaps 0 |
+| After takeoff | flaps retracted | ground spoilers DISARM, nose and runway turnoff lights OFF | |
+| Climb | after takeoff flow | landing lights OFF passing 10000 ft, one thousand to go | |
+| Cruise | FMGC | | |
+| Descent preparation | approach briefing (flyPad) | autobrake as briefed | |
+| Descent / Approach | FMGC | landing lights ON and "Cabin crew, seats for landing" passing 10000 ft; localizer and glideslope alive; speed | APPROACH C/L, then flaps 1, flaps 2, gear down (and ground spoilers ARM), flaps 3, flaps full, then LANDING C/L |
+| Go-around | FMGC | positive climb | "Go around, flaps", gear up, flaps 1, flaps 0 |
+| Landing | below 100 ft RA | callouts: spoilers, reverse green, decel, seventy knots | |
+| After landing | ground spoilers disarmed, below 30 kt, turned off the runway | flaps 0, strobe AUTO, landing lights OFF, nose light TAXI, TCAS STBY | |
+| Parking | engines off, parking brake set | | PARKING C/L |
+| Securing | PARKING C/L | | SECURING THE AIRCRAFT C/L, then the flight ends |
 
-The flyPad sends commands with `L:A380X_VCREW_COMMAND` and reads the state from `L:A380X_VCREW_PHASE`,
-`L:A380X_VCREW_PREFLIGHT_REMAINING`, `L:A380X_VCREW_ACCELERATED` and `L:A380X_VCREW_WORKFLOW`.
+Only the checklists of the ECL are read. The PM verifies the items: sensed items by the FWS or in the cockpit, some
+non sensed items through the aircraft state or the briefings (anti ice, autobrake, minimum of the FMS).
 
-## Checklists
+## Briefings
 
-The checklists are the normal checklists of the ECL (`checklists/Checklists.ts`), in the order of the SOP:
+The takeoff briefing (preflight or before start) and the approach briefing (cruise) are entered in the flyPad, with
+the data of the FMS as default values, and spoken by the PF when performed. Free text entries (taxi route, engine
+failure procedure, threats) are confirmed with a generic phrase. Numbers, runways, frequencies and letters are spoken
+with the radiotelephony words (`speech/Phrases.ts`). The flows use the briefings: takeoff flaps, anti ice, autobrake,
+landing flaps (FULL or 3).
 
-- COCKPIT PREPARATION ("before start checklist down to the line"), available after the takeoff briefing
-- BEFORE START ("below the line"), available once the cockpit preparation checklist and the preflight are completed
+## Cockpit controls
 
-The pilot flying requests the checklist with the primary button. The pilot monitoring activates it on the ECL with the
-ECAM control panel (CL, CHECK, UP, DOWN), operated in a closed loop with the ECL state published by the FWS. For each
-item, the pilot monitoring reads the challenge, the pilot flying responds with the primary button, the pilot
-monitoring verifies the item (sensed items by the FWS, some non sensed items through the aircraft state) and checks
-it on the ECL, or asks to check on a discrepancy. The secondary button stops the checklist.
+The controls operated by the PM are listed in `CockpitControls.ts`. They use the actions of the aircraft presets of
+the flyPad and the events of the MFD SURV page, and can be tested from the flyPad (Settings > Virtual Crew).
+
+## flyPad interface
+
+The flyPad sends commands with `L:A380X_VCREW_COMMAND` (parameter in `L:A380X_VCREW_COMMAND_PARAM`) and reads the
+state from the `L:A380X_VCREW_*` variables of `VirtualCrewStatusLocalVars` (shared/src/VirtualCrew.ts).
 
 ## Structure
 
 | File                           | Purpose                                                                    |
 |--------------------------------|----------------------------------------------------------------------------|
-| `procedures/`                  | The SOP as data, one procedure per flight phase, referencing the SOP items |
+| `VirtualCrewCore.ts`           | The crew without simulator access: phases, flows, checklists, orders, callouts (unit tested with a complete flight) |
+| `VirtualCrew.ts`               | Reads the aircraft, executes the actions, handles buttons, commands and settings |
+| `FlightPhaseManager.ts`        | Flight phases, preflight countdown, preflight workflows (unit tested)      |
+| `procedures/`                  | Sequences of PM callouts and PF orders: takeoff, approach, go-around      |
+| `VirtualCrewEngine.ts`         | Executes a procedure (unit tested)                                         |
+| `flows/`                       | Flows of the PM after the preflight and their triggers                     |
+| `workflows/`                   | Preflight workflows, items performed at a human pace (unit tested)        |
 | `checklists/`                  | ECL checklists, reading and ECL operation (unit tested with a model of the ECL) |
-| `FlightPhaseManager.ts`        | Flight phases, preflight countdown, workflows of the phases (unit tested)  |
-| `workflows/`                   | SOP items performed by one crew member at a human pace (unit tested)       |
-| `VirtualCrewEngine.ts`         | Executes a procedure, pure logic without simulator access (unit tested)    |
-| `VirtualCrew.ts`               | Reads the aircraft, executes the actions, handles buttons and settings     |
+| `callouts/`                    | Engine start, altitude, approach and rollout callouts                      |
+| `briefing/`                    | Briefing data and spoken briefings                                         |
+| `speech/`                      | Composition of numbers, runways, frequencies and letters                   |
+| `CockpitControls.ts`           | Cockpit controls operated by the PM, test actions of the flyPad            |
 | `VoicePlayer.ts`               | Plays the phrases one after the other                                      |
 | `voice-lines.json`             | The phrases, single source for the code and the voice generator            |
 | `voice-line-durations.json`    | Generated by `tools/virtual-crew-voices`, duration of each phrase           |
 
 The voices are generated with `tools/virtual-crew-voices`, see its README for the packaging.
-
-## Procedures
-
-| Procedure | SOP chapter                                           |
-|-----------|-------------------------------------------------------|
-| Takeoff   | Takeoff: from "TAKEOFF ... ANNOUNCE" to "FLAPS ZERO"  |
-| Preflight workflows | Preliminary Cockpit Preparation and Cockpit Preparation (p. 3-17), see `workflows/` |
-
-Items of the workflows are only automated when the cockpit control can be operated reliably through a variable or an
-event (batteries, external power, ADIRS, recorder, parking brake, flight director). The APU and the FMS are left to the
-captain. The other items take the
-time of the crew member and are marked "(not automated yet)" when they change a setting, e.g. the exterior lights
-and the signs, which use the light and switch templates of the simulator.

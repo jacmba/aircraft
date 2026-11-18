@@ -8,7 +8,7 @@ import {
   VirtualCrewFlightPhase,
   VirtualCrewWorkflows,
 } from '../../../shared/src/VirtualCrew';
-import { CrewAction, CrewSeat, SimVarReader } from './VirtualCrewTypes';
+import { AircraftSnapshot, CrewAction, CrewSeat, FmgcPhase, SimVarReader } from './VirtualCrewTypes';
 import { Workflow } from './workflows/Workflow';
 import { WorkflowRunner } from './workflows/WorkflowRunner';
 import { InitialPowerUpWorkflow } from './workflows/InitialPowerUpWorkflow';
@@ -63,6 +63,14 @@ export interface FlightPhaseContext {
   takeoffProcedureCompleted: boolean;
   /** Another task of the crew is in progress (e.g. a checklist), the countdown cannot be accelerated */
   crewBusy?: boolean;
+  /** State of the aircraft for the phases after the engine start, the phases do not advance without it */
+  aircraft?: AircraftSnapshot;
+  /** The after takeoff flow is completed, the climb starts */
+  afterTakeoffFlowDone?: boolean;
+  /** The parking checklist is completed, the aircraft is secured next */
+  parkingChecklistDone?: boolean;
+  /** The securing checklist is completed, the flight is over */
+  securingChecklistDone?: boolean;
 }
 
 export interface FlightPhaseStatus {
@@ -75,6 +83,8 @@ export interface FlightPhaseStatus {
   workflowId: string | undefined;
   /** True if the takeoff briefing has been performed in the current flight */
   briefingDone: boolean;
+  /** True if the approach briefing has been performed in the current flight */
+  approachBriefingDone: boolean;
 }
 
 /** Maximum time step taken into account, so that a jump of the simulation time does not end the preflight */
@@ -91,6 +101,35 @@ const GROUND_PHASES_BEFORE_TAKEOFF = [
   VirtualCrewFlightPhase.BeforeTakeoff,
 ];
 
+/** Phases in flight after the takeoff, the next touchdown is a landing */
+const AIRBORNE_PHASES = [
+  VirtualCrewFlightPhase.AfterTakeoff,
+  VirtualCrewFlightPhase.Climb,
+  VirtualCrewFlightPhase.Cruise,
+  VirtualCrewFlightPhase.DescentPreparation,
+  VirtualCrewFlightPhase.Descent,
+  VirtualCrewFlightPhase.Approach,
+  VirtualCrewFlightPhase.GoAround,
+];
+
+/** Phases in which the approach briefing can be performed */
+const APPROACH_BRIEFING_PHASES = [
+  VirtualCrewFlightPhase.Cruise,
+  VirtualCrewFlightPhase.DescentPreparation,
+  VirtualCrewFlightPhase.Descent,
+  VirtualCrewFlightPhase.Approach,
+];
+
+/** Ground speed above which the aircraft taxies, in knots */
+const TAXI_SPEED = 3;
+
+/** Radio altitude below which the landing phase starts, in feet */
+const LANDING_RADIO_ALTITUDE = 100;
+
+/** Runway vacated: ground spoilers disarmed, below this ground speed and turned away from the runway heading */
+const RUNWAY_VACATED_SPEED = 30;
+const RUNWAY_VACATED_HEADING_CHANGE = 15;
+
 /** Phases in which the takeoff briefing can be performed */
 const BRIEFING_PHASES = [
   VirtualCrewFlightPhase.Preflight,
@@ -106,6 +145,8 @@ const BRIEFING_PHASES = [
  *   only ends when the countdown reaches zero, which can be accelerated while no crew member performs a workflow.
  * - Without preflight, the flight starts with the takeoff briefing.
  * - The takeoff is detected from the aircraft, whatever the current ground phase.
+ * - The other phases follow the aircraft (engine start, taxi, FMGC phases, landing, runway vacated, engines off) or
+ *   the crew (line-up at the holding point, approach briefing, parking and securing checklists).
  */
 export class FlightPhaseManager {
   private currentPhase = VirtualCrewFlightPhase.Idle;
@@ -115,6 +156,11 @@ export class FlightPhaseManager {
   private accelerated = false;
 
   private briefingDone = false;
+
+  private approachBriefingDone = false;
+
+  /** Heading at the touchdown, to detect when the aircraft leaves the runway */
+  private touchdownHeading: number | undefined;
 
   /** Number of preflight events which have been started */
   private startedEvents = 0;
@@ -144,6 +190,7 @@ export class FlightPhaseManager {
       accelerated: this.accelerated,
       workflowId: this.runner.currentWorkflowId,
       briefingDone: this.briefingDone,
+      approachBriefingDone: this.approachBriefingDone,
     };
   }
 
@@ -193,6 +240,16 @@ export class FlightPhaseManager {
         }
         return true;
 
+      case VirtualCrewCommand.CompleteApproachBriefing:
+        if (!APPROACH_BRIEFING_PHASES.includes(this.currentPhase) || this.approachBriefingDone) {
+          return false;
+        }
+        this.approachBriefingDone = true;
+        if (this.currentPhase === VirtualCrewFlightPhase.Cruise) {
+          this.currentPhase = VirtualCrewFlightPhase.DescentPreparation;
+        }
+        return true;
+
       case VirtualCrewCommand.Reset:
         this.runner.cancel();
         this.startFlight();
@@ -224,7 +281,7 @@ export class FlightPhaseManager {
       this.startDueEvents(context);
     }
 
-    const actions = this.runner.update(context.now, context.read);
+    const actions = this.runner.update(context.now, context.read).actions;
 
     if (
       this.currentPhase === VirtualCrewFlightPhase.Preflight &&
@@ -248,13 +305,144 @@ export class FlightPhaseManager {
       !context.onGround
     ) {
       this.currentPhase = VirtualCrewFlightPhase.AfterTakeoff;
-    } else if (this.currentPhase >= VirtualCrewFlightPhase.AfterTakeoff && context.onGround) {
-      // the phases after takeoff are not covered yet, the flight ends with the landing
-      this.startFlight();
-      this.currentPhase = VirtualCrewFlightPhase.Idle;
+    } else if (
+      AIRBORNE_PHASES.includes(this.currentPhase) &&
+      (context.onGround ||
+        (this.currentPhase === VirtualCrewFlightPhase.Approach &&
+          (context.aircraft?.radioAltitude ?? Infinity) < LANDING_RADIO_ALTITUDE))
+    ) {
+      this.currentPhase = VirtualCrewFlightPhase.Landing;
+      this.touchdownHeading = undefined;
+    } else {
+      this.advance(context);
     }
 
     return actions;
+  }
+
+  /**
+   * Enters a phase decided by the crew, e.g. the line-up at the holding point
+   * @param phase the phase
+   */
+  public enter(phase: VirtualCrewFlightPhase): void {
+    this.currentPhase = phase;
+  }
+
+  /** Transitions of the phases after the preparation of the flight, detected from the aircraft */
+  private advance(context: FlightPhaseContext): void {
+    const aircraft = context.aircraft;
+    if (aircraft === undefined) {
+      return;
+    }
+    const engines = aircraft.engines ?? [];
+    const fmgcPhase = aircraft.fmgcPhase;
+    const starting = engines.some((engine) => engine.state === 2 || engine.state === 3);
+
+    switch (this.currentPhase) {
+      case VirtualCrewFlightPhase.BeforeStart:
+        if (aircraft.engineModeSelectorStart || starting) {
+          this.currentPhase = VirtualCrewFlightPhase.EngineStart;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.EngineStart:
+        // the engine mode selector back to NORM ends the engine start
+        if (!aircraft.engineModeSelectorStart && !starting && engines.some((engine) => engine.state === 1)) {
+          this.currentPhase = VirtualCrewFlightPhase.AfterStart;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.AfterStart:
+        if (aircraft.groundSpeed > TAXI_SPEED && !aircraft.parkingBrakeSet) {
+          this.currentPhase = VirtualCrewFlightPhase.Taxi;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.Takeoff:
+        // rejected takeoff
+        if (context.onGround && !context.takeoffRollStarted && aircraft.groundSpeed < TAXI_SPEED) {
+          this.currentPhase = VirtualCrewFlightPhase.BeforeTakeoff;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.AfterTakeoff:
+        if (context.afterTakeoffFlowDone) {
+          this.currentPhase = VirtualCrewFlightPhase.Climb;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.Climb:
+      case VirtualCrewFlightPhase.Cruise:
+      case VirtualCrewFlightPhase.DescentPreparation:
+        if (fmgcPhase === FmgcPhase.Cruise && this.currentPhase === VirtualCrewFlightPhase.Climb) {
+          this.currentPhase = VirtualCrewFlightPhase.Cruise;
+        } else if (fmgcPhase === FmgcPhase.Descent) {
+          this.currentPhase = VirtualCrewFlightPhase.Descent;
+        } else if (fmgcPhase === FmgcPhase.Approach) {
+          this.currentPhase = VirtualCrewFlightPhase.Approach;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.Descent:
+        if (fmgcPhase === FmgcPhase.Approach) {
+          this.currentPhase = VirtualCrewFlightPhase.Approach;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.Approach:
+        if (fmgcPhase === FmgcPhase.GoAround) {
+          this.currentPhase = VirtualCrewFlightPhase.GoAround;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.GoAround:
+        if (fmgcPhase === FmgcPhase.Approach) {
+          this.currentPhase = VirtualCrewFlightPhase.Approach;
+        } else if (fmgcPhase === FmgcPhase.Climb || fmgcPhase === FmgcPhase.Cruise) {
+          this.currentPhase = VirtualCrewFlightPhase.Climb;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.Landing:
+        if (!context.onGround) {
+          if (fmgcPhase === FmgcPhase.GoAround) {
+            this.currentPhase = VirtualCrewFlightPhase.GoAround;
+          }
+        } else if (aircraft.heading !== undefined) {
+          this.touchdownHeading ??= aircraft.heading;
+          const headingChange = Math.abs(((aircraft.heading - this.touchdownHeading + 540) % 360) - 180);
+          if (
+            !aircraft.groundSpoilersArmed &&
+            aircraft.groundSpeed < RUNWAY_VACATED_SPEED &&
+            headingChange > RUNWAY_VACATED_HEADING_CHANGE
+          ) {
+            this.currentPhase = VirtualCrewFlightPhase.AfterLanding;
+          }
+        }
+        break;
+
+      case VirtualCrewFlightPhase.AfterLanding:
+        if (aircraft.parkingBrakeSet && engines.length > 0 && engines.every((engine) => engine.state === 0)) {
+          this.currentPhase = VirtualCrewFlightPhase.Parking;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.Parking:
+        if (context.parkingChecklistDone) {
+          this.currentPhase = VirtualCrewFlightPhase.Securing;
+        }
+        break;
+
+      case VirtualCrewFlightPhase.Securing:
+        if (context.securingChecklistDone) {
+          this.startFlight();
+          this.currentPhase = VirtualCrewFlightPhase.Idle;
+        }
+        break;
+
+      default:
+        break;
+    }
   }
 
   /** Clears the state of the previous flight */
@@ -262,6 +450,8 @@ export class FlightPhaseManager {
     this.preflightRemainingMs = 0;
     this.accelerated = false;
     this.briefingDone = false;
+    this.approachBriefingDone = false;
+    this.touchdownHeading = undefined;
     this.startedEvents = 0;
   }
 

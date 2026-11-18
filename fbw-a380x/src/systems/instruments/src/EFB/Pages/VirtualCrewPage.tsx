@@ -9,8 +9,12 @@ import {
   VirtualCrewButtonEvents,
   VirtualCrewButtonLocalVars,
   VirtualCrewButtonNone,
+  VirtualCrewCommand,
+  VirtualCrewCommandLocalVar,
+  VirtualCrewCommandParamLocalVar,
   VirtualCrewDefaults,
   VirtualCrewSettingKeys,
+  VirtualCrewTestActions,
   VirtualCrewVoices,
   VirtualCrewVoiceSetting,
 } from '../../../../shared/src/VirtualCrew';
@@ -67,6 +71,14 @@ export const VirtualCrewPage: React.FC = () => {
   );
   const [, setPrimaryButton] = useSimVar(VirtualCrewButtonLocalVars.Primary, 'number');
   const [, setSecondaryButton] = useSimVar(VirtualCrewButtonLocalVars.Secondary, 'number');
+  const [, setCommandParam] = useSimVar(VirtualCrewCommandParamLocalVar, 'number');
+  const [, sendCommand] = useSimVar(VirtualCrewCommandLocalVar, 'number');
+
+  const testAction = (index: number) => {
+    // the parameter first, the virtual crew reads it with the command
+    setCommandParam(index);
+    sendCommand(VirtualCrewCommand.TestAction);
+  };
 
   const isEnabled = enabled === '1';
 
@@ -115,6 +127,31 @@ export const VirtualCrewPage: React.FC = () => {
         </SelectGroup>
       </SettingItem>
 
+      <div className="py-4">
+        <p className="text-2xl">Test the cockpit controls of the first officer</p>
+        <p className="mb-3 text-xl text-theme-unselected">
+          The first officer operates these controls in the flows. Check in the cockpit that each control moves.
+        </p>
+        <div className="grid grid-cols-4 gap-2">
+          {VirtualCrewTestActions.map((action, index) => (
+            <button
+              key={action.id}
+              type="button"
+              disabled={!isEnabled}
+              onClick={() => testAction(index)}
+              // the background is always explicit: Coherent paints buttons light grey by default
+              className={`rounded-md border-2 px-2 py-1 text-lg ${
+                isEnabled
+                  ? 'border-theme-highlight bg-theme-body text-theme-highlight hover:bg-theme-highlight hover:text-theme-body'
+                  : 'cursor-not-allowed border-theme-accent bg-theme-accent text-theme-unselected'
+              }`}
+            >
+              {action.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="py-4 text-xl leading-relaxed text-theme-text">
         <p>
           You are the pilot flying, in the seat of the camera. The virtual crew member is the pilot monitoring and
@@ -122,9 +159,10 @@ export const VirtualCrewPage: React.FC = () => {
           settings.
         </p>
         <p className="mt-2">
-          Primary button: requests the available checklist and gives the responses to the checklist items, otherwise
-          gives the next order of the pilot flying (e.g. "Takeoff", "Gear up", "Flaps one"). Secondary button: stops the
-          checklist being read, "Stop" during the takeoff roll before V1, otherwise skips the pending order.
+          Primary button: does the next thing of the SOP, shown on the Crew page: responds to the checklist items,
+          requests the available checklist, starts the line-up flow at the holding point, or gives the next order of the
+          pilot flying (e.g. "Takeoff", "Gear up", "Flaps one", "Gear down", "Go around, flaps"). Secondary button:
+          stops the checklist being read, "Stop" during the takeoff roll before V1, otherwise skips the pending order.
         </p>
       </div>
     </SettingsPage>

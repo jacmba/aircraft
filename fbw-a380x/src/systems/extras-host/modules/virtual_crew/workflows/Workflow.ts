@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { VirtualCrewWorkflowId } from '../../../../shared/src/VirtualCrew';
-import { CrewAction, CrewSeat, SimVarReader } from '../VirtualCrewTypes';
+import { CrewAction, CrewSeat, CrewSpeech, SimVarReader } from '../VirtualCrewTypes';
 
 /**
  * An item which is only verified (or not automated yet): it takes the time of the crew member but has no action
@@ -20,8 +20,10 @@ export interface WorkflowStep {
   durationMs: number;
   /** The item is only executed when this returns true, e.g. 'If the AVAIL lights illuminate' */
   condition?: (read: SimVarReader) => boolean;
-  /** Actions on the aircraft, none for items which are only verified */
-  actions?: CrewAction[];
+  /** Actions on the aircraft, none for items which are only verified. A function reads the aircraft when executed. */
+  actions?: CrewAction[] | ((read: SimVarReader) => CrewAction[]);
+  /** Phrases spoken when the item is executed, e.g. an announcement to the cabin */
+  speech?: CrewSpeech[];
 }
 
 /**
@@ -29,8 +31,11 @@ export interface WorkflowStep {
  * Workflows are only performed by the virtual crew member, the user performs the items of their own seat.
  */
 export interface Workflow {
-  /** Identifier, see VirtualCrewWorkflows in the shared VirtualCrew definitions (name, seat and preflight time) */
-  id: VirtualCrewWorkflowId;
+  /**
+   * Identifier: the preflight workflows are listed in VirtualCrewWorkflows of the shared VirtualCrew definitions (name,
+   * seat and preflight time), the flows of the other phases in flows/Flows.ts
+   */
+  id: VirtualCrewWorkflowId | string;
   /** Seat responsible for the workflow in the SOP */
   seat: CrewSeat;
   steps: WorkflowStep[];

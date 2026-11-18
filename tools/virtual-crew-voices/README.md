@@ -26,7 +26,8 @@ python3 -m venv .venv
 
 The script downloads the models on first use (to `build/piper-models`) and writes:
 
-- `build/virtual-crew-voices/<voice>/vcrew_<voice>_<phrase>.wav`, one file per voice and phrase
+- `build/virtual-crew-voices/<voice>/vcrew_<voice>_<phrase>.wav`, one file per voice and phrase, without the leading
+  and trailing silence, so that composed phrases ("one" "two" "zero") follow each other naturally
 - `build/virtual-crew-voices/sound-xml-entries.xml`, the `<AvionicSounds>` entries for `sound.xml`
 - `voice-line-durations.json` in the virtual crew module, used to play the phrases one after the other.
   Commit it whenever the phrases change.
@@ -56,7 +57,8 @@ is limited to a few fixed slots, so the phrases are packaged with Wwise, followi
    Without WAAPI, the same structure can be created by hand as described in "Setting Up Wwise".
 
    Without a licence key, Wwise runs in trial mode and refuses to generate when the **whole project** has more than
-   200 media files; the sample project already has about 720. Until the key is granted, work on a copy of the sample
+   200 media files; the sample project already has about 720, and the virtual crew alone has more than 200 phrases
+   (all phrases for both voices), so a licence key is needed. Until the key is granted, work on a copy of the sample
    project and remove the sounds of the sample aircraft with `python tools/virtual-crew-voices/wwise_trim_project.py`
    (it refuses to run on the project inside the SDK folder).
 4. Create the package with `FilePackager.App.exe` of Wwise: File > Open `PCK_PC.wfpproj` of the sample project,

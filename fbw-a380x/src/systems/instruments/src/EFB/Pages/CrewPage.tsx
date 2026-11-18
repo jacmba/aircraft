@@ -6,11 +6,13 @@ import { Link } from 'react-router-dom';
 
 import { NXDataStore, PilotSeat } from '@flybywiresim/fbw-sdk';
 import { usePersistentProperty, useSimVar } from '@flybywiresim/fbw-sdk-react';
-import { SimpleInput } from '@flybywiresim/flypad';
+import { SimpleInput, useAppSelector } from '@flybywiresim/flypad';
 import { useArinc429Var } from '@instruments/common/arinc429';
 import {
   VIRTUAL_CREW_PREFLIGHT_ACCELERATION,
   VIRTUAL_CREW_PREFLIGHT_DURATION_S,
+  VirtualCrewApproachBriefingFields,
+  VirtualCrewBriefingField,
   VirtualCrewBriefingFields,
   VirtualCrewButtonLocalVars,
   VirtualCrewChecklists,
@@ -20,10 +22,19 @@ import {
   VirtualCrewDefaults,
   VirtualCrewFlightPhase,
   VirtualCrewFlightPhaseNames,
+  VirtualCrewFlows,
+  VirtualCrewNextActions,
+  VirtualCrewPerformedBriefingKeys,
   VirtualCrewSettingKeys,
   VirtualCrewStatusLocalVars,
   VirtualCrewWorkflows,
 } from '../../../../shared/src/VirtualCrew';
+
+/** The preflight workflows and the flows, in the order of the published workflow index */
+const WorkflowsAndFlows: readonly { id: string; name: string; seat?: string }[] = [
+  ...VirtualCrewWorkflows,
+  ...VirtualCrewFlows.map((flow) => ({ ...flow, seat: 'PM' })),
+];
 
 const ChecklistStepText: Partial<Record<VirtualCrewChecklistStep, string>> = {
   [VirtualCrewChecklistStep.Opening]: 'activating the checklist on the ECL',
@@ -210,6 +221,129 @@ const FmsTakeoffData: FC = () => {
   );
 };
 
+/**
+ * Approach data of the FMS and of the flight plan used as default values of the approach briefing
+ * @returns the landing runway (SimBrief) and the minimum of the FMS, empty if not available
+ */
+const useFmsApproachDefaults = (): Record<'landingRunway' | 'minimum', string> => {
+  const arrivingRunway = useAppSelector((state) => state.simbrief.data.arrivingRunway);
+  const [mda] = useSimVar('L:AIRLINER_MINIMUM_DESCENT_ALTITUDE', 'feet', 1000);
+  const [dh] = useSimVar('L:AIRLINER_DECISION_HEIGHT', 'feet', 1000);
+
+  let minimum = '';
+  if (mda > 0) {
+    minimum = `BARO ${Math.round(mda)}`;
+  } else if (dh >= 0) {
+    minimum = `RADIO ${Math.round(dh)}`;
+  }
+
+  return { landingRunway: arrivingRunway ?? '', minimum };
+};
+
+/** Approach speed of the FMS, shown in the approach briefing */
+const FmsApproachData: FC = () => {
+  const [vapp] = useSimVar('L:A32NX_SPEEDS_VAPP', 'knots', 1000);
+
+  return (
+    <div className="mb-2 flex flex-row justify-between rounded-md bg-theme-accent px-6 py-2">
+      <span className="text-2xl">
+        <span className="text-theme-unselected">VAPP </span>
+        <span className="font-bold text-theme-highlight">{vapp > 0 ? Math.round(vapp) : '---'}</span>
+      </span>
+      <span className="text-xl text-theme-unselected">from FMS</span>
+    </div>
+  );
+};
+
+/**
+ * A briefing: the data of the FMS, the data entered by the pilot and the button to perform it. The briefing is
+ * spoken by the pilot flying with the data as performed, written for the virtual crew before the command.
+ */
+const BriefingCard: FC<{
+  title: string;
+  fields: readonly VirtualCrewBriefingField[];
+  fmsDefaults: Partial<Record<NonNullable<VirtualCrewBriefingField['fmsDefault']>, string>>;
+  performedKey: string;
+  editable: boolean;
+  possible: boolean;
+  onPerform: () => void;
+}> = ({ title, fields, fmsDefaults, performedKey, editable, possible, onPerform, children }) => {
+  const perform = () => {
+    const values: Record<string, string> = {};
+    fields.forEach((field) => {
+      const entered = NXDataStore.getLegacy(field.key, '');
+      values[field.key] = entered !== '' ? entered : (field.fmsDefault ? fmsDefaults[field.fmsDefault] : '') ?? '';
+    });
+    NXDataStore.setLegacy(performedKey, JSON.stringify(values));
+    onPerform();
+  };
+
+  return (
+    <Card title={title} className="w-3/5">
+      {children}
+      <div className="divide-y-2 divide-theme-accent">
+        {fields.map((field) => (
+          <BriefingField
+            key={field.key}
+            storageKey={field.key}
+            label={field.label}
+            placeholder={field.placeholder}
+            disabled={!editable}
+            fmsValue={field.fmsDefault ? fmsDefaults[field.fmsDefault] : undefined}
+          />
+        ))}
+      </div>
+      <div className="mt-3 flex flex-row justify-end">
+        <ActionButton disabled={!possible} onClick={perform}>
+          Perform {title.toLowerCase()}
+        </ActionButton>
+      </div>
+    </Card>
+  );
+};
+
+/** Phases of a flight, from the preparation to the securing of the aircraft */
+const FlightPhases = Object.keys(VirtualCrewFlightPhaseNames)
+  .map((phase) => parseInt(phase) as VirtualCrewFlightPhase)
+  .filter((phase) => phase !== VirtualCrewFlightPhase.Idle);
+
+/** The phases of the flight, the current one highlighted, in two columns read from top to bottom */
+const PhaseTimeline: FC<{ phase: VirtualCrewFlightPhase }> = ({ phase }) => {
+  const half = Math.ceil(FlightPhases.length / 2);
+  const columns = [FlightPhases.slice(0, half), FlightPhases.slice(half)];
+  const phaseClass = (p: VirtualCrewFlightPhase) => {
+    if (p === phase) {
+      return 'font-bold text-theme-highlight';
+    }
+    const past = phase !== VirtualCrewFlightPhase.Idle && p < phase && p !== VirtualCrewFlightPhase.GoAround;
+    return past ? 'text-utility-green' : 'text-theme-unselected';
+  };
+
+  return (
+    <Card title="Flight">
+      <div className="flex flex-row space-x-6 text-lg">
+        {columns.map((column) => (
+          <div key={column[0]} className="flex flex-1 flex-col">
+            {column.map((p) => (
+              <span key={p} className={phaseClass(p)}>
+                {p === phase ? '> ' : ''}
+                {VirtualCrewFlightPhaseNames[p]}
+              </span>
+            ))}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+};
+
+/** A performed briefing, the card is not needed anymore */
+const BriefingDone: FC<{ title: string }> = ({ title }) => (
+  <span className="rounded-md border-2 border-utility-green px-4 py-2 text-xl text-utility-green">
+    {title} performed
+  </span>
+);
+
 /** Workflows of the preflight with their state, the tasks of the seat of the user are left to the user */
 const PreflightSchedule: FC<{ elapsedS: number; runningWorkflowId: string | undefined; userSeat: 'CAPT' | 'FO' }> = ({
   elapsedS,
@@ -236,9 +370,9 @@ const PreflightSchedule: FC<{ elapsedS: number; runningWorkflowId: string | unde
 
       return (
         <div key={workflow.id} className="flex flex-row items-center justify-between whitespace-nowrap py-1">
-          <span className="w-20 shrink-0 font-mono text-theme-unselected">
-            {/* countdown notation, like the preflight timer: T-38:00 for 2 minutes after the start */}
-            {`T-${formatCountdown(VIRTUAL_CREW_PREFLIGHT_DURATION_S - workflow.preflightMinute * 60)}`}
+          <span className="w-16 shrink-0 font-mono text-theme-unselected">
+            {/* countdown notation in minutes, like the preflight timer: T-38 for 2 minutes after the start */}
+            {`T-${VIRTUAL_CREW_PREFLIGHT_DURATION_S / 60 - workflow.preflightMinute}`}
           </span>
           <span className="w-16 shrink-0">{workflow.seat}</span>
           <span className="flex-1 truncate">{workflow.name}</span>
@@ -249,8 +383,24 @@ const PreflightSchedule: FC<{ elapsedS: number; runningWorkflowId: string | unde
   </div>
 );
 
+/** Phases in which the takeoff briefing is shown (performed during the preflight or before start) */
+const TAKEOFF_BRIEFING_PHASES = [
+  VirtualCrewFlightPhase.Preflight,
+  VirtualCrewFlightPhase.TakeoffBriefing,
+  VirtualCrewFlightPhase.BeforeStart,
+];
+
+/** Phases in which the approach briefing can be performed */
+const APPROACH_BRIEFING_PHASES = [
+  VirtualCrewFlightPhase.Cruise,
+  VirtualCrewFlightPhase.DescentPreparation,
+  VirtualCrewFlightPhase.Descent,
+  VirtualCrewFlightPhase.Approach,
+];
+
 /**
- * Page of the flyPad to interact with the virtual crew: flight phase, preflight countdown and takeoff briefing.
+ * Page of the flyPad to interact with the virtual crew: flight phase, next action of the primary button, preflight
+ * countdown, takeoff and approach briefings.
  */
 export const CrewPage: FC = () => {
   const [enabled] = usePersistentProperty(VirtualCrewSettingKeys.Enabled, VirtualCrewDefaults.enabled);
@@ -259,13 +409,16 @@ export const CrewPage: FC = () => {
   const [accelerated] = useSimVar(VirtualCrewStatusLocalVars.Accelerated, 'number', 250);
   const [workflow] = useSimVar(VirtualCrewStatusLocalVars.Workflow, 'number', 250);
   const [briefingDone] = useSimVar(VirtualCrewStatusLocalVars.BriefingDone, 'number', 250);
+  const [approachBriefingDone] = useSimVar(VirtualCrewStatusLocalVars.ApproachBriefingDone, 'number', 250);
+  const [nextAction] = useSimVar(VirtualCrewStatusLocalVars.NextAction, 'number', 250);
   const [checklistAvailable] = useSimVar(VirtualCrewStatusLocalVars.ChecklistAvailable, 'number', 250);
   const [checklistRunning] = useSimVar(VirtualCrewStatusLocalVars.ChecklistRunning, 'number', 250);
   const [checklistItem] = useSimVar(VirtualCrewStatusLocalVars.ChecklistItem, 'number', 250);
   const [checklistStep] = useSimVar(VirtualCrewStatusLocalVars.ChecklistStep, 'number', 250);
   const [, pressPrimary] = useSimVar(VirtualCrewButtonLocalVars.Primary, 'number');
   const [pilotSeat] = useSimVar('L:FBW_PILOT_SEAT', 'enum', 1000);
-  const fmsDefaults = useFmsTakeoffDefaults();
+  const takeoffDefaults = useFmsTakeoffDefaults();
+  const approachDefaults = useFmsApproachDefaults();
   const [, sendCommand] = useSimVar(VirtualCrewCommandLocalVar, 'number');
 
   if (enabled !== '1') {
@@ -286,35 +439,45 @@ export const CrewPage: FC = () => {
   }
 
   const currentPhase = phase as VirtualCrewFlightPhase;
-  const runningWorkflow = workflow > 0 ? VirtualCrewWorkflows[workflow - 1] : undefined;
-  const busy = runningWorkflow !== undefined;
+  const runningWorkflow = workflow > 0 ? WorkflowsAndFlows[workflow - 1] : undefined;
+  const preflightWorkflowRunning = workflow > 0 && workflow <= VirtualCrewWorkflows.length;
   const isAccelerated = accelerated === 1;
   const userSeat = pilotSeat === PilotSeat.Right ? 'FO' : 'CAPT';
   const isBriefingDone = briefingDone === 1;
-  // the briefing belongs to the preflight, or is the first step when the preflight is skipped
-  const briefingPossible =
-    currentPhase === VirtualCrewFlightPhase.Preflight ||
-    currentPhase === VirtualCrewFlightPhase.TakeoffBriefing ||
-    currentPhase === VirtualCrewFlightPhase.BeforeStart;
-  const briefingEditable = currentPhase <= VirtualCrewFlightPhase.BeforeStart;
+  const isApproachBriefingDone = approachBriefingDone === 1;
+  const preparing = currentPhase === VirtualCrewFlightPhase.Idle || currentPhase === VirtualCrewFlightPhase.Preflight;
+  const nextActionLabel = VirtualCrewNextActions[nextAction]?.label ?? VirtualCrewNextActions[0].label;
 
-  const clearBriefing = () => VirtualCrewBriefingFields.forEach((field) => NXDataStore.setLegacy(field.key, ''));
+  const clearBriefings = () =>
+    [
+      ...VirtualCrewBriefingFields.map((field) => field.key),
+      ...VirtualCrewApproachBriefingFields.map((field) => field.key),
+      VirtualCrewPerformedBriefingKeys.Takeoff,
+      VirtualCrewPerformedBriefingKeys.Approach,
+    ].forEach((key) => NXDataStore.setLegacy(key, ''));
+
+  const showTakeoffBriefing = !isBriefingDone && (preparing || TAKEOFF_BRIEFING_PHASES.includes(currentPhase));
+  const showApproachBriefing = !isApproachBriefingDone && APPROACH_BRIEFING_PHASES.includes(currentPhase);
 
   return (
     <div>
       <div className="mb-4 flex flex-row items-center justify-between">
         <h1 className="font-bold">Crew</h1>
-        {currentPhase !== VirtualCrewFlightPhase.Idle && (
-          <ActionButton
-            className="!py-1"
-            onClick={() => {
-              sendCommand(VirtualCrewCommand.Reset);
-              clearBriefing();
-            }}
-          >
-            End flight
-          </ActionButton>
-        )}
+        <div className="flex flex-row items-center space-x-4">
+          {isBriefingDone && <BriefingDone title="Takeoff briefing" />}
+          {isApproachBriefingDone && <BriefingDone title="Approach briefing" />}
+          {currentPhase !== VirtualCrewFlightPhase.Idle && (
+            <ActionButton
+              className="!py-1"
+              onClick={() => {
+                sendCommand(VirtualCrewCommand.Reset);
+                clearBriefings();
+              }}
+            >
+              End flight
+            </ActionButton>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-row space-x-6">
@@ -322,7 +485,11 @@ export const CrewPage: FC = () => {
           <Card title="Flight phase">
             <p className="text-3xl text-theme-highlight">{VirtualCrewFlightPhaseNames[currentPhase] ?? 'Unknown'}</p>
             <p className="mt-2 text-2xl">
-              {runningWorkflow ? `${runningWorkflow.seat}: ${runningWorkflow.name}` : 'No crew member busy'}
+              <span className="text-theme-unselected">Primary button: </span>
+              {nextActionLabel}
+            </p>
+            <p className="mt-1 text-xl text-theme-unselected">
+              {runningWorkflow ? `${runningWorkflow.seat ?? ''} ${runningWorkflow.name}` : 'No crew member busy'}
             </p>
             <ChecklistStatus
               available={checklistAvailable}
@@ -334,85 +501,98 @@ export const CrewPage: FC = () => {
             />
           </Card>
 
-          <Card title="Preflight">
-            {currentPhase === VirtualCrewFlightPhase.Idle && (
-              <div className="flex flex-col space-y-4">
-                <ActionButton onClick={() => sendCommand(VirtualCrewCommand.StartPreflight)}>
-                  Start preflight (40 min)
-                </ActionButton>
-                <ActionButton onClick={() => sendCommand(VirtualCrewCommand.StartTakeoffBriefing)}>
-                  Skip to takeoff briefing
-                </ActionButton>
-              </div>
-            )}
+          {preparing ? (
+            <Card title="Preflight">
+              {currentPhase === VirtualCrewFlightPhase.Idle && (
+                <div className="flex flex-col space-y-4">
+                  <ActionButton onClick={() => sendCommand(VirtualCrewCommand.StartPreflight)}>
+                    Start preflight (40 min)
+                  </ActionButton>
+                  <ActionButton onClick={() => sendCommand(VirtualCrewCommand.StartTakeoffBriefing)}>
+                    Skip to takeoff briefing
+                  </ActionButton>
+                </div>
+              )}
 
-            {currentPhase === VirtualCrewFlightPhase.Preflight && (
-              <div className="flex flex-col items-center space-y-2">
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => sendCommand(VirtualCrewCommand.ToggleAcceleration)}
-                  // dark background in every state, Coherent paints buttons light grey by default
-                  className={`w-full rounded-lg border-4 bg-theme-body py-2 font-mono text-7xl ${
-                    busy
-                      ? 'cursor-not-allowed border-theme-accent text-theme-unselected'
-                      : isAccelerated
-                        ? 'border-theme-highlight text-theme-highlight'
-                        : 'border-theme-accent text-theme-text hover:border-theme-highlight'
-                  }`}
-                >
-                  {formatCountdown(remaining)}
-                </button>
-                <p className="text-xl text-theme-unselected">
-                  {busy && 'Crew busy, the countdown cannot be accelerated'}
-                  {!busy &&
-                    isAccelerated &&
-                    `Accelerated x${VIRTUAL_CREW_PREFLIGHT_ACCELERATION}, click for normal pace`}
-                  {!busy && !isAccelerated && `Click to accelerate x${VIRTUAL_CREW_PREFLIGHT_ACCELERATION}`}
-                </p>
-                <PreflightSchedule
-                  elapsedS={VIRTUAL_CREW_PREFLIGHT_DURATION_S - remaining}
-                  runningWorkflowId={runningWorkflow?.id}
-                  userSeat={userSeat}
-                />
-              </div>
-            )}
-
-            {currentPhase > VirtualCrewFlightPhase.Preflight && (
-              <p className="text-2xl text-theme-unselected">Preflight completed or skipped</p>
-            )}
-          </Card>
+              {currentPhase === VirtualCrewFlightPhase.Preflight && (
+                <div className="flex flex-col items-center space-y-2">
+                  <button
+                    type="button"
+                    disabled={preflightWorkflowRunning}
+                    onClick={() => sendCommand(VirtualCrewCommand.ToggleAcceleration)}
+                    // dark background in every state, Coherent paints buttons light grey by default
+                    className={`w-full rounded-lg border-4 bg-theme-body py-2 font-mono text-7xl ${
+                      preflightWorkflowRunning
+                        ? 'cursor-not-allowed border-theme-accent text-theme-unselected'
+                        : isAccelerated
+                          ? 'border-theme-highlight text-theme-highlight'
+                          : 'border-theme-accent text-theme-text hover:border-theme-highlight'
+                    }`}
+                  >
+                    {formatCountdown(remaining)}
+                  </button>
+                  <p className="text-xl text-theme-unselected">
+                    {preflightWorkflowRunning && 'Crew busy, the countdown cannot be accelerated'}
+                    {!preflightWorkflowRunning &&
+                      isAccelerated &&
+                      `Accelerated x${VIRTUAL_CREW_PREFLIGHT_ACCELERATION}, click for normal pace`}
+                    {!preflightWorkflowRunning &&
+                      !isAccelerated &&
+                      `Click to accelerate x${VIRTUAL_CREW_PREFLIGHT_ACCELERATION}`}
+                  </p>
+                  <PreflightSchedule
+                    elapsedS={VIRTUAL_CREW_PREFLIGHT_DURATION_S - remaining}
+                    runningWorkflowId={runningWorkflow?.id}
+                    userSeat={userSeat}
+                  />
+                </div>
+              )}
+            </Card>
+          ) : (
+            <PhaseTimeline phase={currentPhase} />
+          )}
         </div>
 
-        <Card title="Takeoff briefing" className="w-3/5">
-          <FmsTakeoffData />
-          <div className="divide-y-2 divide-theme-accent">
-            {VirtualCrewBriefingFields.map((field) => (
-              <BriefingField
-                key={field.key}
-                storageKey={field.key}
-                label={field.label}
-                placeholder={field.placeholder}
-                disabled={!briefingEditable}
-                fmsValue={field.fmsDefault ? fmsDefaults[field.fmsDefault] : undefined}
-              />
-            ))}
-          </div>
-          <div className="mt-3 flex flex-row justify-end">
-            {isBriefingDone ? (
-              <span className="rounded-md border-2 border-utility-green px-5 py-3 text-2xl text-utility-green">
-                Takeoff briefing performed
-              </span>
-            ) : (
-              <ActionButton
-                disabled={!briefingPossible}
-                onClick={() => sendCommand(VirtualCrewCommand.CompleteTakeoffBriefing)}
-              >
-                Perform takeoff briefing
-              </ActionButton>
-            )}
-          </div>
-        </Card>
+        {showTakeoffBriefing && (
+          <BriefingCard
+            title="Takeoff briefing"
+            fields={VirtualCrewBriefingFields}
+            fmsDefaults={takeoffDefaults}
+            performedKey={VirtualCrewPerformedBriefingKeys.Takeoff}
+            editable={currentPhase <= VirtualCrewFlightPhase.BeforeStart}
+            possible={currentPhase !== VirtualCrewFlightPhase.Idle}
+            onPerform={() => sendCommand(VirtualCrewCommand.CompleteTakeoffBriefing)}
+          >
+            <FmsTakeoffData />
+          </BriefingCard>
+        )}
+
+        {showApproachBriefing && (
+          <BriefingCard
+            title="Approach briefing"
+            fields={VirtualCrewApproachBriefingFields}
+            fmsDefaults={approachDefaults}
+            performedKey={VirtualCrewPerformedBriefingKeys.Approach}
+            editable
+            possible
+            onPerform={() => sendCommand(VirtualCrewCommand.CompleteApproachBriefing)}
+          >
+            <FmsApproachData />
+          </BriefingCard>
+        )}
+
+        {!showTakeoffBriefing && !showApproachBriefing && (
+          <Card title="Briefings" className="w-3/5">
+            <p className="text-2xl">
+              {isBriefingDone ? 'Takeoff briefing performed.' : 'Takeoff briefing not performed.'}
+            </p>
+            <p className="mt-2 text-2xl">
+              {isApproachBriefingDone
+                ? 'Approach briefing performed.'
+                : 'The approach briefing is available in cruise, before the descent.'}
+            </p>
+          </Card>
+        )}
       </div>
     </div>
   );

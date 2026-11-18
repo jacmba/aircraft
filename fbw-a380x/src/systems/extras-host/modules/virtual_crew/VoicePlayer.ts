@@ -15,6 +15,8 @@ interface QueuedPhrase {
   line: VoiceLineId;
   /** Called when the phrase starts, e.g. to execute an action along with the confirmation */
   onStart?: () => void;
+  /** Pause after the phrase, in milliseconds, {@link PAUSE_BETWEEN_PHRASES_MS} if not defined */
+  pauseAfterMs?: number;
 }
 
 /**
@@ -63,7 +65,8 @@ export class VoicePlayer {
 
     phrase.onStart?.();
     this.play(wwiseEventName(phrase.voice, phrase.line));
-    this.busyUntil = now + VoicePlayer.duration(phrase.voice, phrase.line) + PAUSE_BETWEEN_PHRASES_MS;
+    this.busyUntil =
+      now + VoicePlayer.duration(phrase.voice, phrase.line) + (phrase.pauseAfterMs ?? PAUSE_BETWEEN_PHRASES_MS);
   }
 
   private static duration(voice: CrewVoice, line: VoiceLineId): number {

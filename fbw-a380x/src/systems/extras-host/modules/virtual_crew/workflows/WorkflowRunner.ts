@@ -1,7 +1,7 @@
 // Copyright (c) 2026 FlyByWire Simulations
 // SPDX-License-Identifier: GPL-3.0
 
-import { CrewAction, SimVarReader } from '../VirtualCrewTypes';
+import { CrewOutput, SimVarReader } from '../VirtualCrewTypes';
 import { Workflow } from './Workflow';
 
 /**
@@ -50,15 +50,17 @@ export class WorkflowRunner {
    * Executes the items which are due
    * @param now the current time in milliseconds
    * @param read reads simulator variables for the conditions of the items
-   * @returns the actions on the aircraft
+   * @returns the actions on the aircraft and the phrases of the crew member
    */
-  public update(now: number, read: SimVarReader): CrewAction[] {
-    const actions: CrewAction[] = [];
+  public update(now: number, read: SimVarReader): CrewOutput {
+    const output: CrewOutput = { speech: [], actions: [] };
 
     while (this.current !== undefined && now >= this.nextStepAt) {
       const step = this.current.steps[this.stepIndex];
       if (step && (step.condition?.(read) ?? true)) {
-        actions.push(...(step.actions ?? []));
+        const actions = typeof step.actions === 'function' ? step.actions(read) : step.actions;
+        output.actions.push(...(actions ?? []));
+        output.speech.push(...(step.speech ?? []));
       }
 
       this.stepIndex++;
@@ -76,7 +78,16 @@ export class WorkflowRunner {
       }
     }
 
-    return actions;
+    return output;
+  }
+
+  /**
+   * True while the workflow is being performed or waits for another one
+   * @param id the workflow identifier
+   * @returns true if the workflow is running or queued
+   */
+  public isPendingOrRunning(id: string): boolean {
+    return this.current?.id === id || this.queue.some((workflow) => workflow.id === id);
   }
 
   private begin(workflow: Workflow, startTime: number): void {

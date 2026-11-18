@@ -111,6 +111,9 @@ export class VirtualCrewEngine {
         this.stepIndex = orderIndex;
         this.executeOrder(order, aircraft, output);
         this.advance();
+      } else if (order?.type === 'order' && order.unavailableLine) {
+        output.speech.push({ role: 'PF', line: order.order });
+        output.speech.push({ role: 'PM', line: order.unavailableLine });
       }
     } else if (this.procedure.abort?.available(aircraft, this.stepIndex)) {
       output.speech.push({ role: 'PF', line: this.procedure.abort.order });
@@ -122,6 +125,15 @@ export class VirtualCrewEngine {
     return output;
   }
 
+  /** Identifier of the next order the pilot flying can give, undefined if none */
+  public get nextOrderId(): string | undefined {
+    if (this.state !== ProcedureState.Running) {
+      return undefined;
+    }
+    const index = this.nextOrderIndex();
+    return index >= 0 ? this.procedure.steps[index].id : undefined;
+  }
+
   /** @returns the index of the current or next order step, -1 if there is none */
   private nextOrderIndex(): number {
     for (let i = this.stepIndex; i < this.procedure.steps.length; i++) {
@@ -130,6 +142,11 @@ export class VirtualCrewEngine {
       }
     }
     return -1;
+  }
+
+  /** Ends the procedure, e.g. a procedure which is only started when needed */
+  public complete(): void {
+    this.state = ProcedureState.Completed;
   }
 
   /** Starts the procedure again from the beginning */
@@ -144,7 +161,8 @@ export class VirtualCrewEngine {
       output.actions.push(...step.actions(aircraft));
     }
     if (step.confirmation) {
-      output.speech.push({ role: 'PM', line: step.confirmation });
+      const line = typeof step.confirmation === 'function' ? step.confirmation(aircraft) : step.confirmation;
+      output.speech.push({ role: 'PM', line });
     }
   }
 

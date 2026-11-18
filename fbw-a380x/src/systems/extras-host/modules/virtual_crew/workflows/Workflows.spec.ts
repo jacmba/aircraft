@@ -21,7 +21,7 @@ function perform(workflow: Workflow, read: SimVarReader): { actions: CrewAction[
   runner.start(workflow, now);
   while (runner.busy) {
     now += 100;
-    actions.push(...runner.update(now, read));
+    actions.push(...runner.update(now, read).actions);
   }
   return { actions, durationMs: now };
 }
@@ -54,11 +54,11 @@ describe('virtual crew workflows', () => {
     runner.start(a, 0);
     runner.start(b, 0);
 
-    expect(runner.update(999, () => 0)).toEqual([]);
+    expect(runner.update(999, () => 0).actions).toEqual([]);
     expect(runner.currentWorkflowId).toBe('initialPowerUp');
-    expect(runner.update(1000, () => 0)).toEqual([{ type: 'GEAR_UP' }]);
+    expect(runner.update(1000, () => 0).actions).toEqual([{ type: 'GEAR_UP' }]);
     expect(runner.currentWorkflowId).toBe('aircraftStatus');
-    expect(runner.update(2000, () => 0)).toEqual([{ type: 'FLAPS_SET', index: 0 }]);
+    expect(runner.update(2000, () => 0).actions).toEqual([{ type: 'FLAPS_SET', index: 0 }]);
     expect(runner.busy).toBe(false);
   });
 

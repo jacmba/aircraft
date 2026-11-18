@@ -28,8 +28,10 @@ export interface OrderStep {
   done: (aircraft: AircraftSnapshot) => boolean;
   /** Phrase of the pilot flying */
   order: VoiceLineId;
-  /** Confirmation of the pilot monitoring, if any */
-  confirmation?: VoiceLineId;
+  /** Confirmation of the pilot monitoring, if any, which can depend on the aircraft (e.g. the new flaps position) */
+  confirmation?: VoiceLineId | ((aircraft: AircraftSnapshot) => VoiceLineId);
+  /** Answer of the pilot monitoring when the order is given but not possible yet, e.g. "check speed" */
+  unavailableLine?: VoiceLineId;
   /** Actions of the pilot monitoring */
   actions?: (aircraft: AircraftSnapshot) => CrewAction[];
 }
