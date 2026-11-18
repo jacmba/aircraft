@@ -125,6 +125,8 @@ export interface AircraftSnapshot {
   glideslopeDots?: number;
   /** Flaps lever position for landing of the approach briefing: 3 or 4 (FULL) */
   briefedLandingFlaps?: number;
+  /** Brake pedals of the pilot flying (0 to 100) and pressure of the alternate brakes (psi) */
+  brakes?: { left: number; right: number; alternatePressure: number };
   /** Sidestick and rudder pedals of the pilot flying, -1 to 1 */
   flightControls?: { pitch: number; roll: number; rudder: number };
 }

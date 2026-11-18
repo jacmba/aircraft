@@ -589,6 +589,12 @@
     },
     "fullRight": {
       "text": "Full right."
+    },
+    "brakeCheck": {
+      "text": "Brake check."
+    },
+    "pressureZero": {
+      "text": "Pressure zero."
     }
   }
 }

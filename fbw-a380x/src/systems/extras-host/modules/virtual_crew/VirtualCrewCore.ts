@@ -25,6 +25,7 @@ import { approachBriefingSpeech, takeoffBriefingSpeech } from './briefing/Briefi
 import { TestActions } from './CockpitControls';
 import { WorkflowRunner } from './workflows/WorkflowRunner';
 import { FlightControlCheck } from './callouts/FlightControlCheck';
+import { BrakeCheck } from './callouts/BrakeCheck';
 import { Workflow } from './workflows/Workflow';
 
 /** Everything the core needs at each update */
@@ -72,9 +73,10 @@ const SeatBeltsCycleTest: Workflow = {
  * output.
  *
  * The primary button does the next thing of the SOP: respond to the checklist being read, request the available
- * checklist, start the flight control check after the after start checklist, start the line-up flow at the holding
+ * checklist, start the flight control check after the after start checklist, the brake check when the taxi starts,
+ * start the line-up flow at the holding
  * point, or give the next order (takeoff, gear up, flaps, ...).
- * The secondary button stops the checklist or the flight control check, rejects the takeoff before V1 or skips the
+ * The secondary button stops the checklist or the flight control and brake checks, rejects the takeoff before V1 or skips the
  * pending order.
  */
 export class VirtualCrewCore {
@@ -101,6 +103,8 @@ export class VirtualCrewCore {
   private readonly testRunner = new WorkflowRunner();
 
   public readonly flightControlCheck = new FlightControlCheck();
+
+  public readonly brakeCheck = new BrakeCheck();
 
   private previousPhase = VirtualCrewFlightPhase.Idle;
 
@@ -230,6 +234,7 @@ export class VirtualCrewCore {
     );
     this.output.speech.push(
       ...this.flightControlCheck.update(aircraft.flightControls ?? { pitch: 0, roll: 0, rudder: 0 }),
+      ...this.brakeCheck.update(aircraft.brakes ?? { left: 0, right: 0, alternatePressure: 0 }),
     );
     // the pilot monitoring also verifies the items with the state of the crew
     const read: SimVarReader = (name) =>
@@ -266,6 +271,8 @@ export class VirtualCrewCore {
         return 'lineUpFlow';
       case 'flightControlCheck':
         return 'flightControlCheck';
+      case 'brakeCheck':
+        return 'brakeCheck';
       case 'order': {
         const id = action.engine.nextOrderId;
         return VirtualCrewNextActions.find((next) => next.id === id)?.id ?? 'none';
@@ -299,6 +306,14 @@ export class VirtualCrewCore {
       return;
     }
 
+    if (this.brakeCheck.isRunning) {
+      // the pilot monitoring watches the brake pressure, the secondary button ends the check
+      if (input === 'SECONDARY') {
+        this.brakeCheck.skip();
+      }
+      return;
+    }
+
     if (input === 'SECONDARY') {
       const engine = this.activeEngine();
       if (engine) {
@@ -322,6 +337,9 @@ export class VirtualCrewCore {
         break;
       case 'flightControlCheck':
         this.output.speech.push(...this.flightControlCheck.start());
+        break;
+      case 'brakeCheck':
+        this.output.speech.push(...this.brakeCheck.start());
         break;
       case 'order':
         this.add(action.engine.input('PRIMARY', context.aircraft));
@@ -363,9 +381,10 @@ export class VirtualCrewCore {
     | { kind: 'checklist'; checklist: Checklist }
     | { kind: 'lineUpFlow' }
     | { kind: 'flightControlCheck' }
+    | { kind: 'brakeCheck' }
     | { kind: 'order'; engine: VirtualCrewEngine }
     | { kind: 'none' } {
-    if (this.flightControlCheck.isRunning) {
+    if (this.flightControlCheck.isRunning || this.brakeCheck.isRunning) {
       return { kind: 'none' };
     }
     const checklist = this.checklists.available(this.checklistContext(aircraft));
@@ -379,6 +398,10 @@ export class VirtualCrewCore {
       !this.flightControlCheck.isDone
     ) {
       return { kind: 'flightControlCheck' };
+    }
+    // once the aircraft starts moving, after the flight control check, before the taxi checklist
+    if (this.phase === VirtualCrewFlightPhase.Taxi && this.flightControlCheck.isDone && !this.brakeCheck.isDone) {
+      return { kind: 'brakeCheck' };
     }
     if (
       this.phase === VirtualCrewFlightPhase.Taxi &&
@@ -415,6 +438,7 @@ export class VirtualCrewCore {
 
   private resetFlight(): void {
     this.flightControlCheck.reset();
+    this.brakeCheck.reset();
     this.checklists.reset();
     this.flows.reset();
     this.engineStartMonitor.reset();
@@ -433,6 +457,7 @@ export class VirtualCrewCore {
       isFlowDone: (id) => this.flows.isDone(id as Parameters<FlowManager['isDone']>[0]),
       landingConfiguration: !aircraft.gearLeverUp && aircraft.flapsLeverIndex >= landingFlaps,
       flightControlsChecked: this.flightControlCheck.isDone,
+      brakesChecked: this.brakeCheck.isDone,
     };
   }
 

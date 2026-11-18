@@ -211,6 +211,17 @@ describe('virtual crew core, a complete flight', () => {
       'PM:respNeutral',
     ]);
     expect(core.flightControlCheck.isDone).toBe(true);
+
+    // brake check: the pilot monitoring waits for the brakes
+    expect(core.nextAction).toBe('brakeCheck');
+    press();
+    expect(speech.slice(-1)).toEqual(['PF:brakeCheck']);
+    run(1);
+    expect(core.nextAction).toBe('none');
+    aircraft.brakes = { left: 60, right: 60, alternatePressure: 0 };
+    run(0.5);
+    expect(speech.slice(-1)).toEqual(['PM:pressureZero']);
+    aircraft.brakes = { left: 0, right: 0, alternatePressure: 0 };
     readChecklist('taxi');
 
     // holding point: line-up flow, line-up checklist, takeoff

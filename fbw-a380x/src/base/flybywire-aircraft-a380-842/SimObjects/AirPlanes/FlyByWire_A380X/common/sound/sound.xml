@@ -1441,6 +1441,8 @@
         <Sound WwiseData="true" WwiseEvent="vcrew_male_full_down" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_full_left" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_full_right" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_brake_check" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_pressure_zero" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_takeoff" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_thrust_set" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_one_hundred_knots" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
@@ -1636,6 +1638,8 @@
         <Sound WwiseData="true" WwiseEvent="vcrew_female_full_down" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_full_left" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_full_right" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_brake_check" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_pressure_zero" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
 
     </AvionicSounds>
 

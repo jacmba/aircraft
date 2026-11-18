@@ -16,6 +16,8 @@ export interface ChecklistContext {
   landingConfiguration?: boolean;
   /** The flight control check has been performed (or skipped) */
   flightControlsChecked?: boolean;
+  /** The brake check has been performed (or skipped) */
+  brakesChecked?: boolean;
 }
 
 /**
@@ -24,7 +26,7 @@ export interface ChecklistContext {
  * - COCKPIT PREPARATION ("before start checklist down to the line") once the takeoff briefing has been performed
  * - BEFORE START ("below the line") once the cockpit preparation checklist is completed and the preflight is over
  * - AFTER START once the after start flow is performed
- * - TAXI during the taxi, after the flight control check
+ * - TAXI during the taxi, after the flight control check and the brake check
  * - LINE-UP at the holding point, once the line-up flow is performed
  * - APPROACH during the descent or the approach
  * - LANDING once the approach checklist is completed and the aircraft is configured for landing
@@ -103,7 +105,11 @@ export class ChecklistManager {
           flowDone('afterStartFlow')
         );
       case 'taxi':
-        return phase === VirtualCrewFlightPhase.Taxi && (context.flightControlsChecked ?? true);
+        return (
+          phase === VirtualCrewFlightPhase.Taxi &&
+          (context.flightControlsChecked ?? true) &&
+          (context.brakesChecked ?? true)
+        );
       case 'lineUp':
         return phase === VirtualCrewFlightPhase.BeforeTakeoff && flowDone('lineUpFlow');
       case 'approach':

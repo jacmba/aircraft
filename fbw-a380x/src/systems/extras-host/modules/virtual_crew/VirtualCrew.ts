@@ -453,6 +453,14 @@ export class VirtualCrew implements Instrument {
       localizerDots: locValid ? get('L:A32NX_RADIO_RECEIVER_LOC_DEVIATION') / LOCALIZER_DOT_DEG : undefined,
       glideslopeDots: gsValid ? get('L:A32NX_RADIO_RECEIVER_GS_DEVIATION') / GLIDESLOPE_DOT_DEG : undefined,
       briefedLandingFlaps: this.read(BriefingVars.LandingFlaps),
+      brakes: {
+        left: get('L:A32NX_LEFT_BRAKE_PEDAL_INPUT'),
+        right: get('L:A32NX_RIGHT_BRAKE_PEDAL_INPUT'),
+        alternatePressure: Math.max(
+          get('L:A32NX_HYD_BRAKE_ALTN_LEFT_PRESS'),
+          get('L:A32NX_HYD_BRAKE_ALTN_RIGHT_PRESS'),
+        ),
+      },
       flightControls: {
         pitch: get('L:A32NX_SIDESTICK_POSITION_Y'),
         roll: get('L:A32NX_SIDESTICK_POSITION_X'),
