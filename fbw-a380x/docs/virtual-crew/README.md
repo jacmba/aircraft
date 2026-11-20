@@ -7,7 +7,8 @@ Operating Procedures (SOP). You are the **pilot flying (PF)** and the virtual fi
 - prepares the cockpit during a 40 minute preflight
 - performs the flows of the SOP (lights, transponder, TCAS, ground spoilers, autobrake, flaps, APU after landing...)
 - reads the normal checklists of the ECL and checks them on the ECAM
-- makes the standard callouts ("Thrust set", "V1", "Positive climb", "Localizer alive", "Reverse green"...)
+- makes the standard callouts ("Thrust set", "V1", "Positive climb", "Transition", "Localizer alive", "Reverse
+  green"...) and crosschecks the altimeter settings
 - executes your orders ("Gear up", "Flaps one", "Gear down"...) and confirms them
 - answers your takeoff and approach briefings
 
@@ -138,9 +139,9 @@ only need to fly and press the primary button when the Crew page proposes someth
 | Before takeoff           | line-up flow requested at the holding point          | line-up flow                                               | LINE-UP C/L, announce takeoff            |
 | Takeoff                  | takeoff announced (or takeoff roll detected)        | takeoff callouts                                           | gear up, flaps 1, flaps 0                |
 | After takeoff            | flaps retracted                                     | after takeoff flow                                         |                                          |
-| Climb, Cruise            | after takeoff flow done, then FMGC phase            | lights at 10000 ft, "one thousand to go"                   |                                          |
+| Climb, Cruise            | after takeoff flow done, then FMGC phase            | lights at 10000 ft, transition, "one thousand to go"       |                                          |
 | Descent preparation      | approach briefing performed                         | autobrake as briefed                                       |                                          |
-| Descent, Approach        | FMGC phase                                          | lights and PA at 10000 ft, approach callouts               | APPROACH C/L, flaps, gear, LANDING C/L   |
+| Descent, Approach        | FMGC phase                                          | transition, lights and PA at 10000 ft, approach callouts   | APPROACH C/L, flaps, gear, LANDING C/L   |
 | Landing                  | touchdown (or below 100 ft RA in approach)          | landing callouts                                           |                                          |
 | Go-around                | FMGC go-around phase                                | "Positive climb"                                           | go-around flaps, gear up, flaps          |
 | After landing            | runway vacated                                      | after landing flow, APU start                              | "Taxi lights off"                        |
@@ -149,20 +150,25 @@ only need to fly and press the primary button when the Crew page proposes someth
 
 ### 4.1 Preflight
 
-From a cold and dark aircraft, press **Start preflight (40 min)**. The preflight follows the SOP chapters
-"Preliminary Cockpit Preparation" and "Cockpit Preparation", over 40 minutes before the start:
+From a cold and dark aircraft, press **Start preflight (40 min)**. You say "OK, let's get it started" and the first
+officer answers "All right, I'm going with the power up". The preflight follows the SOP chapters "Preliminary Cockpit
+Preparation", "Exterior Walkaround" and "Cockpit Preparation", over 40 minutes before the start:
 
 ![The preflight countdown and schedule, with the takeoff briefing](images/preflight.png)
 
 - The **countdown** shows the time to the start. The **schedule** lists the workflows with their time (T-40 is 40
   minutes before the start):
   - **FO** workflows are performed by the first officer: initial power up (batteries, external power), fire tests,
-    overhead panel, main instrument panel and pedestal, glareshield (flight directors).
+    exterior walkaround, overhead panel, main instrument panel and pedestal, glareshield (flight directors).
+  - The **exterior walkaround** takes 6 minutes after the fire tests. The first officer says "I'm going out for the
+    walkaround" ("OK!"), is shown *outside* on the Crew page, and comes back with "I'm back from the walkaround, no
+    issues found" ("All right, thank you so much!").
   - **CAPT** workflows are **your tasks**, shown in amber: aircraft status verification and the FMS initialization
     with the AFS CP crosscheck. The APU start is also yours.
   - States: PLANNED, IN PROGRESS, DONE, YOUR TASK.
 - **Click the countdown** to accelerate it x30, and again to return to the normal pace. It cannot be accelerated
-  while a crew member is busy ("Crew busy, the countdown cannot be accelerated").
+  while a crew member is busy in the cockpit ("Crew busy, the countdown cannot be accelerated"), but it can during
+  the walkaround.
 - Perform the **takeoff briefing** during the preflight, once the FMS is prepared (see [6. Briefings](#6-briefings)).
   Afterwards, the primary button requests the **COCKPIT PREPARATION** checklist.
 - The preflight ends when the countdown reaches 0: the phase becomes **Before pushback or start**.
@@ -254,6 +260,9 @@ runway turnoff lights OFF.
 
 ### 4.8 Climb and cruise
 
+- Crossing the **transition altitude** of the FMS, the first officer calls **"Transition"**. Set your altimeter to
+  STD (pull the baro knob): you call **"Altimeter standard"** as soon as it is on STD (right away if it already was),
+  the first officer sets their own altimeter to STD and replies "Altimeter standard".
 - Passing **10000 ft** in climb, the first officer turns the landing lights OFF, and the wing lights OFF if on.
 - **"One thousand to go"** is called 1000 ft before the altitude selected on the FCU, in climb and descent.
 - Nothing else is needed in cruise until the approach briefing.
@@ -265,6 +274,11 @@ In cruise, the **Approach briefing** card appears. Fill it in after preparing th
 questions"). The phase becomes **Descent preparation** and the first officer sets the **autobrake** as briefed.
 
 ![The approach briefing card in cruise, with a selection list open](images/briefing-dropdown.png)
+
+Crossing the **transition level** of the FMS, the first officer calls **"Transition"**. Set your altimeter to the QNH
+of the APPR PERF page of the FMS: you announce the QNH (e.g. **"QNH one zero one three"**, or "QNH two niner niner
+two" in inches) as soon as it is set to that value (any QNH if none is entered in the FMS), the first officer sets
+their own altimeter and replies with the same QNH.
 
 Passing **10000 ft** in descent, the first officer turns the landing lights ON, the wing lights ON at night, and calls
 "Cabin crew, seats for landing".
@@ -323,7 +337,10 @@ are read.
    against your briefings. If the item is not correct, it says **"Please check, I see a discrepancy"** and the Crew
    page shows the discrepancy in amber. Correct the item: the checklist continues as soon as it is correct, or you
    can respond again.
-4. At the end: "... checklist complete".
+4. Items whose ECL response ends with **(BOTH)** (e.g. BARO REF, T.O SPEEDS & THRUST, FLIGHT CONTROLS, FLAPS
+   SETTING, T.O RWY) are answered by both pilots: you first ("Set"), then the first officer with the same words once
+   they have checked the item ("Set").
+5. At the end: "... checklist complete".
 
 ![A discrepancy on the BEACON item](images/checklist-discrepancy.png)
 
@@ -393,6 +410,7 @@ Empty fields are not spoken. The briefings are stored per flight and cleared wit
 | Takeoff roll                  | "Thrust set", "One hundred knots", "V1", "Rotate"                 |
 | Initial climb, go-around      | "Positive climb"                                                 |
 | 1000 ft before the FCU altitude | "One thousand to go"                                           |
+| Transition altitude (climb), transition level (descent) | "Transition", then the reply to your altimeter call: "Altimeter standard" / "QNH ..." |
 | 10000 ft in descent           | "Cabin crew, seats for landing"                                  |
 | Approach                      | "Localizer alive", "Glideslope alive", "Speed"                   |
 | Landing roll                  | "Spoilers", "Reverse green", "Decel", "Seventy knots"            |
@@ -407,6 +425,7 @@ As captain and pilot flying you keep the items of the left seat and the decision
 - flying the aircraft, the FCU and the FMS (initialization, performance, approach)
 - the APU start before the flight, the engine start and shutdown
 - the seat belts signs (except the double cycle of the line-up flow) and the anti ice
+- your altimeter setting at the transition altitude and level (the first officer sets their own)
 - the nose and runway turnoff lights for the taxi out
 - the parking brake, the pushback, the communications with ATC and the cabin
 - the rejected takeoff and the go-around decision

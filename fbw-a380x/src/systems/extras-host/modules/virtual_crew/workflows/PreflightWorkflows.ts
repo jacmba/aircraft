@@ -48,6 +48,41 @@ export const FireTestsWorkflow: Workflow = {
   ],
 };
 
+/**
+ * SOP "Exterior Walkaround", by the first officer after the preliminary cockpit preparation: the first officer goes
+ * out, the walkaround itself takes place outside of the cockpit (see {@link WalkaroundReturnWorkflow})
+ */
+export const WalkaroundWorkflow: Workflow = {
+  id: 'walkaround',
+  seat: 'FO',
+  steps: [
+    {
+      item: 'EXTERIOR WALKAROUND ... START',
+      durationMs: 2000,
+      speech: [
+        { role: 'PM', line: 'walkaroundGoingOut' },
+        { role: 'PF', line: 'okay' },
+      ],
+    },
+  ],
+};
+
+/** End of the exterior walkaround: the first officer is back in the cockpit */
+export const WalkaroundReturnWorkflow: Workflow = {
+  id: 'walkaround',
+  seat: 'FO',
+  steps: [
+    {
+      item: 'EXTERIOR WALKAROUND ... COMPLETED',
+      durationMs: 1000,
+      speech: [
+        { role: 'PM', line: 'walkaroundBack' },
+        { role: 'PF', line: 'thankYou' },
+      ],
+    },
+  ],
+};
+
 /** SOP p. 7-9, "Overhead Panel" (first officer) */
 export const OverheadPanelWorkflow: Workflow = {
   id: 'overheadPanel',

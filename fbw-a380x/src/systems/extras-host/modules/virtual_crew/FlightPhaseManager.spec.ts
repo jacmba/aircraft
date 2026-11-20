@@ -63,7 +63,9 @@ describe('virtual crew flight phases', () => {
     const set: string[] = [];
     for (let i = 0; i < seconds; i++) {
       now += 1000;
-      manager.update(context(changes)).forEach((action) => action.type === 'SET_LOCAL_VAR' && set.push(action.name));
+      manager
+        .update(context(changes))
+        .actions.forEach((action) => action.type === 'SET_LOCAL_VAR' && set.push(action.name));
     }
     return set;
   };
@@ -74,14 +76,43 @@ describe('virtual crew flight phases', () => {
     manager.update(context());
   });
 
+  it('lets the countdown be accelerated while the first officer is out for the walkaround', () => {
+    manager = new FlightPhaseManager(DefaultPreflightSchedule);
+    manager.update(context());
+    manager.command(VirtualCrewCommand.StartPreflight, context());
+    const speech: string[] = [];
+    const runSpeech = (seconds: number) => {
+      for (let i = 0; i < seconds; i++) {
+        now += 1000;
+        speech.push(...manager.update(context()).speech.map((s) => `${s.role}:${s.line}`));
+      }
+    };
+    // up to the walkaround, after the fire tests
+    runSpeech(6 * 60 + 5);
+    expect(speech).toEqual(['PM:walkaroundGoingOut', 'PF:okay']);
+    expect(manager.busy).toBe(false);
+    expect(manager.command(VirtualCrewCommand.ToggleAcceleration, context())).toBe(true);
+    // back after six minutes of the countdown, the acceleration stops when the first officer is busy again
+    runSpeech(Math.ceil((6 * 60) / VIRTUAL_CREW_PREFLIGHT_ACCELERATION) + 2);
+    expect(speech).toEqual(['PM:walkaroundGoingOut', 'PF:okay', 'PM:walkaroundBack', 'PF:thankYou']);
+    expect(manager.status.accelerated).toBe(false);
+  });
+
   it('starts idle', () => {
     expect(manager.phase).toBe(VirtualCrewFlightPhase.Idle);
   });
 
   it('schedules every workflow of the shared definitions', () => {
-    expect(DefaultPreflightSchedule.map((event) => event.workflow.id)).toEqual(
+    expect([...new Set(DefaultPreflightSchedule.map((event) => event.workflow.id))]).toEqual(
       VirtualCrewWorkflows.map((workflow) => workflow.id),
     );
+    // the first officer comes back from the walkaround after its duration, before the next workflow
+    const walkaround = DefaultPreflightSchedule.filter((event) => event.workflow.id === 'walkaround');
+    expect(walkaround.map((event) => event.atS)).toEqual([6 * 60, 12 * 60]);
+    expect(walkaround[1].workflow.steps[0].speech?.map((speech) => speech.line)).toEqual([
+      'walkaroundBack',
+      'thankYou',
+    ]);
     // every workflow starts during the preflight, in the order of the SOP
     const times = DefaultPreflightSchedule.map((event) => event.atS);
     expect([...times].sort((a, b) => a - b)).toEqual(times);

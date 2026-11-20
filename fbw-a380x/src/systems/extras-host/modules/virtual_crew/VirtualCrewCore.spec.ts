@@ -274,6 +274,11 @@ describe('virtual crew core, a complete flight', () => {
     expect(keyEvents()).toEqual(expect.arrayContaining(['TAXI_LIGHTS_OFF:2', 'TAXI_LIGHTS_OFF:3']));
   };
 
+  it('starts the preflight with a short dialogue, the first officer begins the power up', () => {
+    expect(command(VirtualCrewCommand.StartPreflight)).toBe(true);
+    expect(speech).toEqual(['PF:letsGetStarted', 'PM:goingWithPowerUp']);
+  });
+
   it('flies the departure with the flows, checklists and orders of the SOP', () => {
     departure();
   });

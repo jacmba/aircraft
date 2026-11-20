@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { VirtualCrewChecklistStep } from '../../../../shared/src/VirtualCrew';
-import { CrewAction, CrewSpeech, SimVarReader } from '../VirtualCrewTypes';
+import { CrewAction, CrewRole, CrewSpeech, SimVarReader } from '../VirtualCrewTypes';
 import { Checklist, ChecklistItem } from './Checklists';
 
 /** ID of the first normal checklist of the ECL, the ECL menu lists the checklists by ascending ID */
@@ -46,10 +46,10 @@ export interface ChecklistOutput {
 }
 
 /** Phrases of the response of the pilot flying to an item, which can depend on the aircraft */
-export function itemResponse(item: ChecklistItem, read: SimVarReader): CrewSpeech[] {
+export function itemResponse(item: ChecklistItem, read: SimVarReader, role: CrewRole = 'PF'): CrewSpeech[] {
   const lines = typeof item.response === 'function' ? item.response(read) : [item.response];
   return lines.map((line, i) => ({
-    role: 'PF',
+    role,
     line,
     pauseAfterMs: i < lines.length - 1 ? CHAINED_PAUSE_MS : undefined,
   }));
@@ -87,6 +87,9 @@ export class ChecklistRunner {
   private afterOpening = VirtualCrewChecklistStep.Reading;
 
   private pendingResponse = false;
+
+  /** The pilot monitoring still has to respond to a "(BOTH)" item, once verified */
+  private secondResponsePending = false;
 
   /** The response has been given, the pilot monitoring verifies the item before checking it */
   private verifyPending = false;
@@ -132,6 +135,7 @@ export class ChecklistRunner {
     this.checklist = checklist;
     this.itemIndex = ChecklistRunner.firstItemFrom(checklist, 0);
     this.pendingResponse = false;
+    this.secondResponsePending = false;
     this.afterOpening = VirtualCrewChecklistStep.Reading;
     this.enter(VirtualCrewChecklistStep.Opening, now + PRESS_INTERVAL_MS);
     return { speech: [{ role: 'PF', line: checklist.request }], presses: [], actions: [] };
@@ -169,9 +173,11 @@ export class ChecklistRunner {
     // the response is handled right away, the pilot monitoring then takes a moment to verify
     if (this.pendingResponse) {
       this.pendingResponse = false;
-      output.speech.push(...itemResponse(checklist.items[this.itemIndex], read));
+      const item = checklist.items[this.itemIndex];
+      output.speech.push(...itemResponse(item, read));
       this.enter(VirtualCrewChecklistStep.Checking, now + VERIFY_DELAY_MS);
       this.verifyPending = true;
+      this.secondResponsePending = item.both === true;
       return output;
     }
 
@@ -202,6 +208,11 @@ export class ChecklistRunner {
             this.enter(VirtualCrewChecklistStep.Discrepancy, now);
             break;
           }
+        }
+        if (this.secondResponsePending) {
+          // "(BOTH)": the pilot monitoring responds in turn, then checks the item
+          this.secondResponsePending = false;
+          output.speech.push(...itemResponse(checklist.items[this.itemIndex], read, 'PM'));
         }
         this.check(checklist, ecl, now, output);
         break;

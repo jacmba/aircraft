@@ -2,9 +2,10 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { VirtualCrewFlightPhase } from '../../../../shared/src/VirtualCrew';
-import { AircraftSnapshot, CrewSpeech, VoiceLineId } from '../VirtualCrewTypes';
+import { AircraftSnapshot, BaroSnapshot, CrewOutput, CrewSpeech, VoiceLineId } from '../VirtualCrewTypes';
+import { CockpitControls } from '../CockpitControls';
 import { CHAINED_PAUSE_MS } from '../checklists/ChecklistRunner';
-import { digitWord } from '../speech/Phrases';
+import { digitWord, digitWords } from '../speech/Phrases';
 
 /*
  * Callouts of the pilot monitoring which are not part of a sequence of orders: engine start, approach monitoring,
@@ -20,6 +21,9 @@ export interface MonitorContext {
 
 const pm = (...lines: VoiceLineId[]): CrewSpeech[] =>
   lines.map((line, i) => ({ role: 'PM', line, pauseAfterMs: i < lines.length - 1 ? CHAINED_PAUSE_MS : undefined }));
+
+const pf = (...lines: VoiceLineId[]): CrewSpeech[] =>
+  lines.map((line, i) => ({ role: 'PF', line, pauseAfterMs: i < lines.length - 1 ? CHAINED_PAUSE_MS : undefined }));
 
 const engineWords = (index: number): VoiceLineId[] => ['engine', digitWord(index + 1)];
 
@@ -209,5 +213,169 @@ export class RolloutMonitor {
   public reset(): void {
     this.announced.clear();
     this.fast = false;
+  }
+}
+
+/** Altitude margin to arm the transition callouts, in feet */
+const TRANSITION_ARMING_MARGIN_FT = 200;
+
+/** Difference below which two barometric references are the same, in hectopascals (0.01 inHg is 0.34 hPa) */
+const BARO_TOLERANCE_HPA = 0.6;
+
+/** Interval between two attempts of the pilot monitoring to set their altimeter, in milliseconds */
+const BARO_RETRY_INTERVAL_MS = 1500;
+
+/** Attempts of the pilot monitoring to set their altimeter before replying anyway */
+const BARO_MAX_ATTEMPTS = 3;
+
+const CLIMB_PHASES = [
+  VirtualCrewFlightPhase.AfterTakeoff,
+  VirtualCrewFlightPhase.Climb,
+  VirtualCrewFlightPhase.GoAround,
+];
+
+const DESCENT_PHASES = [
+  VirtualCrewFlightPhase.Cruise,
+  VirtualCrewFlightPhase.DescentPreparation,
+  VirtualCrewFlightPhase.Descent,
+  VirtualCrewFlightPhase.Approach,
+];
+
+/**
+ * The words of a barometric reference, as set on the FCU: "one zero one three" in hectopascals, "two niner niner two"
+ * in inches of mercury
+ * @param baro the reference
+ * @returns the phrases
+ */
+export function qnhWords(baro: BaroSnapshot): VoiceLineId[] {
+  const value = baro.inHg ? Math.round(baro.hpa / HPA_PER_INHG) : Math.round(baro.hpa);
+  return digitWords(value.toString());
+}
+
+/** Hectopascals in one inch of mercury, the values in inches are spoken without the decimal point */
+const HPA_PER_INHG = 33.8639 / 100;
+
+type TransitionState = 'idle' | 'armed' | 'awaitingPf' | 'settingPm' | 'done';
+
+/**
+ * Transition altitude (climb) and transition level (descent), SOP "Climb" and "Descent":
+ * - the pilot monitoring calls "transition" when crossing the transition altitude or level of the FMS
+ * - in climb, the pilot flying calls "altimeter standard" once their altimeter is on STD (right away if it already
+ *   was), in descent the QNH once their altimeter is set to the QNH of the APPR PERF page (any QNH if none entered)
+ * - the pilot monitoring then sets their own altimeter and replies with the same words
+ *
+ * Each callout is armed when the aircraft is on the other side of the transition with a margin, once per flight in
+ * each direction.
+ */
+export class TransitionMonitor {
+  private climb: TransitionState = 'idle';
+
+  private descent: TransitionState = 'idle';
+
+  private reply: VoiceLineId[] = [];
+
+  private attempts = 0;
+
+  private nextAttemptAt = 0;
+
+  public update(context: MonitorContext): CrewOutput {
+    const output: CrewOutput = { speech: [], actions: [] };
+    const { aircraft, phase, now } = context;
+    const altitude = aircraft.altitude;
+    const baro = aircraft.baro;
+    if (aircraft.onGround || altitude === undefined || baro === undefined) {
+      return output;
+    }
+
+    const transitionAltitude = aircraft.transitionAltitude;
+    if (transitionAltitude !== undefined && transitionAltitude > 0) {
+      if (
+        this.climb === 'idle' &&
+        CLIMB_PHASES.includes(phase) &&
+        altitude < transitionAltitude - TRANSITION_ARMING_MARGIN_FT
+      ) {
+        this.climb = 'armed';
+      }
+      if (this.climb === 'armed' && altitude >= transitionAltitude && aircraft.verticalSpeed > 0) {
+        this.climb = 'awaitingPf';
+        output.speech.push(...pm('transition'));
+      }
+    }
+    if (this.climb === 'awaitingPf' && baro.pf.std) {
+      this.climb = 'settingPm';
+      this.startReply(['altimeterStandard'], now, output);
+    }
+    if (this.climb === 'settingPm' && this.setPmAltimeter(true, baro.pf.hpa, baro.pm, baro.pmSide, now, output)) {
+      this.climb = 'done';
+    }
+
+    const transitionLevel = aircraft.transitionLevel;
+    if (transitionLevel !== undefined && transitionLevel > 0) {
+      const transitionLevelFt = transitionLevel * 100;
+      if (
+        this.descent === 'idle' &&
+        DESCENT_PHASES.includes(phase) &&
+        altitude > transitionLevelFt + TRANSITION_ARMING_MARGIN_FT
+      ) {
+        this.descent = 'armed';
+      }
+      if (this.descent === 'armed' && altitude <= transitionLevelFt && aircraft.verticalSpeed < 0) {
+        this.descent = 'awaitingPf';
+        output.speech.push(...pm('transition'));
+      }
+    }
+    const qnh = aircraft.destinationQnh ?? 0;
+    if (
+      this.descent === 'awaitingPf' &&
+      !baro.pf.std &&
+      (qnh <= 0 || Math.abs(baro.pf.hpa - qnh) < BARO_TOLERANCE_HPA)
+    ) {
+      this.descent = 'settingPm';
+      this.startReply(['qnh', ...qnhWords(baro.pf)], now, output);
+    }
+    if (this.descent === 'settingPm' && this.setPmAltimeter(false, baro.pf.hpa, baro.pm, baro.pmSide, now, output)) {
+      this.descent = 'done';
+    }
+
+    return output;
+  }
+
+  public reset(): void {
+    this.climb = 'idle';
+    this.descent = 'idle';
+  }
+
+  /** The pilot flying announces the setting, the pilot monitoring will reply once their altimeter is set */
+  private startReply(words: VoiceLineId[], now: number, output: CrewOutput): void {
+    output.speech.push(...pf(...words));
+    this.reply = words;
+    this.attempts = 0;
+    this.nextAttemptAt = now;
+  }
+
+  /**
+   * The pilot monitoring sets their altimeter like the one of the pilot flying, and replies when it is set (or after a
+   * few attempts, e.g. when the FCU does not react)
+   * @returns true when the pilot monitoring has replied
+   */
+  private setPmAltimeter(
+    std: boolean,
+    hpa: number,
+    pmBaro: BaroSnapshot,
+    side: 'L' | 'R',
+    now: number,
+    output: CrewOutput,
+  ): boolean {
+    const set = std ? pmBaro.std : !pmBaro.std && Math.abs(pmBaro.hpa - hpa) < BARO_TOLERANCE_HPA;
+    if (!set && this.attempts < BARO_MAX_ATTEMPTS) {
+      if (now >= this.nextAttemptAt) {
+        this.attempts++;
+        this.nextAttemptAt = now + BARO_RETRY_INTERVAL_MS;
+        output.actions.push(...CockpitControls.baro(side, std, hpa, pmBaro.std));
+      }
+      return false;
+    }
+    output.speech.push(...pm(...this.reply));
+    return true;
   }
 }

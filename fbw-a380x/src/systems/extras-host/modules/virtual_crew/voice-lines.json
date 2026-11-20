@@ -80,9 +80,6 @@
     "respSet": {
       "text": "Set."
     },
-    "respSetBoth": {
-      "text": "Set, both."
-    },
     "pleaseCheck": {
       "text": "Please check, I see a discrepancy."
     },
@@ -248,23 +245,8 @@
     "respNeutral": {
       "text": "Neutral."
     },
-    "respCheckedBoth": {
-      "text": "Checked, both."
-    },
-    "respConfirmedBoth": {
-      "text": "Confirmed, both."
-    },
     "respSetForTakeoff": {
       "text": "Set for takeoff."
-    },
-    "respConfOnePlusFBoth": {
-      "text": "Config one plus F, both."
-    },
-    "respConfTwoBoth": {
-      "text": "Config two, both."
-    },
-    "respConfThreeBoth": {
-      "text": "Config three, both."
     },
     "numZero": {
       "text": "zero"
@@ -583,6 +565,45 @@
     },
     "taxiLightsOff": {
       "text": "Taxi lights off."
+    },
+    "respConfirmed": {
+      "text": "Confirmed."
+    },
+    "respConfOnePlusF": {
+      "text": "Config one plus F."
+    },
+    "respConfTwo": {
+      "text": "Config two."
+    },
+    "respConfThree": {
+      "text": "Config three."
+    },
+    "transition": {
+      "text": "Transition."
+    },
+    "altimeterStandard": {
+      "text": "Altimeter standard."
+    },
+    "qnh": {
+      "text": "Q N H"
+    },
+    "letsGetStarted": {
+      "text": "OK, let's get it started."
+    },
+    "goingWithPowerUp": {
+      "text": "All right, I'm going with the power up."
+    },
+    "walkaroundGoingOut": {
+      "text": "I'm going out for the walkaround."
+    },
+    "okay": {
+      "text": "OK!"
+    },
+    "walkaroundBack": {
+      "text": "I'm back from the walkaround, no issues found."
+    },
+    "thankYou": {
+      "text": "All right, thank you so much!"
     }
   }
 }

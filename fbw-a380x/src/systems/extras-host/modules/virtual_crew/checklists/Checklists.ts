@@ -27,6 +27,11 @@ export interface ChecklistItem {
    */
   sensed: boolean;
   /**
+   * The ECL response ends with "(BOTH)": both pilots respond, the pilot flying first, then the pilot monitoring with
+   * the same words once they have verified the item
+   */
+  both?: boolean;
+  /**
    * Verification of the item by the pilot monitoring, looking at the cockpit. A non sensed item is accepted if not
    * defined. A sensed item is accepted when the ECL or this verification shows it, so that a delayed ECL state does
    * not cause a false discrepancy.
@@ -73,13 +78,13 @@ const enginesAntiIceOn = (read: SimVarReader) =>
 const takeoffConfigResponse = (read: SimVarReader): VoiceLineId[] => {
   switch (read(CockpitStates.flapsLever)) {
     case 1:
-      return ['respConfOnePlusFBoth'];
+      return ['respConfOnePlusF'];
     case 2:
-      return ['respConfTwoBoth'];
+      return ['respConfTwo'];
     case 3:
-      return ['respConfThreeBoth'];
+      return ['respConfThree'];
     default:
-      return ['respSetBoth'];
+      return ['respSet'];
   }
 };
 
@@ -99,7 +104,7 @@ export const CockpitPreparationChecklist: Checklist = {
       sensed: true,
       verify: (read) => isOn(read, CockpitStates.seatBelts),
     },
-    { name: 'BARO REF', challenge: 'clBaroRef', response: 'respSetBoth', sensed: false },
+    { name: 'BARO REF', challenge: 'clBaroRef', response: 'respSet', both: true, sensed: false },
   ],
 };
 
@@ -120,7 +125,8 @@ export const BeforeStartChecklist: Checklist = {
     {
       name: 'T.O SPEEDS & THRUST',
       challenge: 'clTakeoffSpeedsAndThrust',
-      response: 'respSetBoth',
+      response: 'respSet',
+      both: true,
       sensed: false,
       verify: (read) =>
         read('L:AIRLINER_V1_SPEED') > 0 && read('L:AIRLINER_VR_SPEED') > 0 && read('L:AIRLINER_V2_SPEED') > 0,
@@ -183,7 +189,8 @@ export const TaxiChecklist: Checklist = {
     {
       name: 'FLIGHT CONTROLS',
       challenge: 'clFlightControls',
-      response: 'respCheckedBoth',
+      response: 'respChecked',
+      both: true,
       sensed: false,
       verify: (read) => read(CrewVars.FlightControlsChecked) === 1,
     },
@@ -191,6 +198,7 @@ export const TaxiChecklist: Checklist = {
       name: 'FLAPS SETTING',
       challenge: 'clFlapsSetting',
       response: takeoffConfigResponse,
+      both: true,
       sensed: false,
       verify: (read) => read(CockpitStates.flapsLever) >= 1 && read(CockpitStates.flapsLever) <= 3,
     },
@@ -219,7 +227,7 @@ export const LineUpChecklist: Checklist = {
   request: 'lineUpChecklist',
   complete: 'lineUpChecklistComplete',
   items: [
-    { name: 'T.O RWY', challenge: 'clTakeoffRunway', response: 'respConfirmedBoth', sensed: false },
+    { name: 'T.O RWY', challenge: 'clTakeoffRunway', response: 'respConfirmed', both: true, sensed: false },
     { name: 'PACK 1 & 2', challenge: 'clPacks', response: 'respOn', sensed: false },
   ],
 };
@@ -231,7 +239,7 @@ export const ApproachChecklist: Checklist = {
   request: 'approachChecklist',
   complete: 'approachChecklistComplete',
   items: [
-    { name: 'BARO REF', challenge: 'clBaroRef', response: 'respSetBoth', sensed: false },
+    { name: 'BARO REF', challenge: 'clBaroRef', response: 'respSet', both: true, sensed: false },
     {
       name: 'SEAT BELTS',
       challenge: 'clSeatBelts',

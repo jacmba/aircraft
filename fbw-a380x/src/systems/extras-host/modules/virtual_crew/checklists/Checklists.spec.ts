@@ -82,7 +82,8 @@ describe('virtual crew checklists', () => {
       'PM:clSeatBelts',
       'PF:respOn',
       'PM:clBaroRef',
-      'PF:respSetBoth',
+      'PF:respSet',
+      'PM:respSet',
       'PM:cockpitPreparationChecklistComplete',
     ]);
     expect(ecl.states.get(CockpitPreparationChecklist.eclId)!.procedureCompleted).toBe(true);

@@ -77,6 +77,16 @@ export interface EngineSnapshot {
   fuelFlow: number;
 }
 
+/** Barometric reference of one side of the FCU (EFIS control panel) */
+export interface BaroSnapshot {
+  /** STD selected */
+  std: boolean;
+  /** Reference set (QNH or QFE), in hectopascals */
+  hpa: number;
+  /** The reference is displayed in inches of mercury */
+  inHg: boolean;
+}
+
 /** Aircraft state as perceived by the crew, all speeds in knots, altitudes in feet, vertical speed in ft/min */
 export interface AircraftSnapshot {
   onGround: boolean;
@@ -131,6 +141,14 @@ export interface AircraftSnapshot {
   localizerDots?: number;
   /** Glideslope received, deviation in dots (undefined if not received) */
   glideslopeDots?: number;
+  /** Transition altitude of the FMS (departure), in feet, undefined if not available */
+  transitionAltitude?: number;
+  /** Transition level of the FMS (arrival), as a flight level, undefined if not available */
+  transitionLevel?: number;
+  /** QNH of the APPR PERF page of the FMS, in hectopascals, 0 if not entered */
+  destinationQnh?: number;
+  /** Barometric references of the pilot flying and of the pilot monitoring, with the FCU side of the latter */
+  baro?: { pf: BaroSnapshot; pm: BaroSnapshot; pmSide: 'L' | 'R' };
   /** Flaps lever position for landing of the approach briefing: 3 or 4 (FULL) */
   briefedLandingFlaps?: number;
   /** Brake pedals of the pilot flying (0 to 100) and pressure of the alternate brakes (psi) */

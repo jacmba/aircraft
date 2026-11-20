@@ -25,7 +25,7 @@ for the taxi.
 
 | Phase (SOP chapter) | Started by | PM flow (automatic) | Primary button |
 |---------------------|------------|---------------------|----------------|
-| Preflight (optional, 40 min) | flyPad | workflows of the PM seat, at their time | COCKPIT PREPARATION C/L after the takeoff briefing |
+| Preflight (optional, 40 min) | flyPad ("OK, let's get it started") | workflows of the PM seat, at their time, exterior walkaround after the fire tests (6 min outside, the countdown can be accelerated) | COCKPIT PREPARATION C/L after the takeoff briefing |
 | Takeoff briefing | flyPad, without preflight | | |
 | Before start | end of the preflight or briefing | transponder AUTO once BEFORE START C/L done and beacon ON | BEFORE START C/L |
 | Engine start | engine mode selector IGN START | callouts: start valve open, fuel flow, engine stable | |
@@ -34,17 +34,18 @@ for the taxi.
 | Before takeoff | primary button at the holding point | strobe ON, nose light T.O, TCAS TA/RA, seat belts double cycle, "Cabin crew, seats for takeoff" | LINE-UP C/L, then "Takeoff" (PM: landing and nose lights) |
 | Takeoff | thrust levers FLX/TOGA | callouts up to positive climb | gear up, flaps 1, flaps 0 |
 | After takeoff | flaps retracted | ground spoilers DISARM, nose and runway turnoff lights OFF | |
-| Climb | after takeoff flow | landing lights and wing lights OFF passing 10000 ft, one thousand to go | |
+| Climb | after takeoff flow | "Transition" at the transition altitude, then "Altimeter standard" (PF once on STD, PM after setting theirs); landing lights and wing lights OFF passing 10000 ft, one thousand to go | |
 | Cruise | FMGC | | |
 | Descent preparation | approach briefing (flyPad) | autobrake as briefed | |
-| Descent / Approach | FMGC | landing lights ON, wing lights ON at night and "Cabin crew, seats for landing" passing 10000 ft; localizer and glideslope alive; speed | APPROACH C/L, then flaps 1, flaps 2, gear down (and ground spoilers ARM, runway turnoff lights ON, nose light T.O), flaps 3, flaps full, then LANDING C/L |
+| Descent / Approach | FMGC | "Transition" at the transition level, then "QNH ..." (PF once set to the APPR PERF QNH, PM after setting theirs); landing lights ON, wing lights ON at night and "Cabin crew, seats for landing" passing 10000 ft; localizer and glideslope alive; speed | APPROACH C/L, then flaps 1, flaps 2, gear down (and ground spoilers ARM, runway turnoff lights ON, nose light T.O), flaps 3, flaps full, then LANDING C/L |
 | Go-around | FMGC | positive climb | "Go around, flaps", gear up, flaps 1, flaps 0 |
 | Landing | below 100 ft RA | callouts: spoilers, reverse green, decel, seventy knots | |
 | After landing | ground spoilers disarmed, below 30 kt, turned off the runway | flaps 0, strobe AUTO, landing lights OFF, nose light TAXI, TCAS and XPDR STBY, FD, LS and ND overlays OFF, APU start | "Taxi lights off": nose, runway turnoff (and taxi camera) and wing lights OFF |
 | Parking | parking brake set after "taxi lights off" (or engines off) | APU bleed ON once the APU is available | PARKING C/L once the engines are off |
 | Securing | PARKING C/L | | SECURING THE AIRCRAFT C/L, then the flight ends |
 
-Only the checklists of the ECL are read. The items of the ECAM memo (T.O and LDG) are read as one item: "ECAM memo"
+Only the checklists of the ECL are read. Items whose ECL response ends with "(BOTH)" are answered by the PF, then by
+the PM with the same words once verified. The items of the ECAM memo (T.O and LDG) are read as one item: "ECAM memo"
 ... "takeoff, no blue" / "landing, no blue", verified together. The PM verifies the items: sensed items by the FWS or in the cockpit, some
 non sensed items through the aircraft state or the briefings (anti ice, autobrake, minimum of the FMS).
 

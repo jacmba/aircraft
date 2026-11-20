@@ -19,7 +19,13 @@ import { ChecklistContext, ChecklistManager } from './checklists/ChecklistManage
 import { ChecklistOutput, EclState, EcpButton } from './checklists/ChecklistRunner';
 import { Checklist, CrewVars } from './checklists/Checklists';
 import { FlowManager } from './flows/Flows';
-import { AltitudeMonitor, ApproachMonitor, EngineStartMonitor, RolloutMonitor } from './callouts/CalloutMonitors';
+import {
+  AltitudeMonitor,
+  ApproachMonitor,
+  EngineStartMonitor,
+  RolloutMonitor,
+  TransitionMonitor,
+} from './callouts/CalloutMonitors';
 import { BriefingValues } from './briefing/BriefingData';
 import { approachBriefingSpeech, takeoffBriefingSpeech } from './briefing/BriefingSpeech';
 import { TestActions } from './CockpitControls';
@@ -102,6 +108,8 @@ export class VirtualCrewCore {
   private readonly approachMonitor = new ApproachMonitor();
 
   private readonly rolloutMonitor = new RolloutMonitor();
+
+  private readonly transitionMonitor = new TransitionMonitor();
 
   private readonly testRunner = new WorkflowRunner();
 
@@ -188,7 +196,13 @@ export class VirtualCrewCore {
           return undefined;
         }
         const fms = { v1: context.aircraft.v1, vr: context.aircraft.vr, v2: context.read('L:AIRLINER_V2_SPEED') };
-        if (command === VirtualCrewCommand.CompleteTakeoffBriefing) {
+        if (command === VirtualCrewCommand.StartPreflight) {
+          // the first officer performs the initial power up, unless the user sits in their seat
+          output.speech.push(
+            { role: 'PF', line: 'letsGetStarted' },
+            ...(context.virtualSeat === 'FO' ? [{ role: 'PM', line: 'goingWithPowerUp' } as const] : []),
+          );
+        } else if (command === VirtualCrewCommand.CompleteTakeoffBriefing) {
           output.speech.push(...takeoffBriefingSpeech(context.readBriefing?.('takeoff') ?? {}, fms));
         } else if (command === VirtualCrewCommand.CompleteApproachBriefing) {
           const vapp = { vapp: context.aircraft.vapp };
@@ -222,7 +236,7 @@ export class VirtualCrewCore {
     }
     this.add(this.goAround.update(aircraft));
 
-    this.output.actions.push(...this.phases.update(this.phaseContext(context)));
+    this.add(this.phases.update(this.phaseContext(context)));
     this.onPhaseChange(context);
 
     this.add(
@@ -252,6 +266,7 @@ export class VirtualCrewCore {
       ...this.approachMonitor.update(monitorContext),
       ...this.rolloutMonitor.update(monitorContext),
     );
+    this.add(this.transitionMonitor.update(monitorContext));
 
     return this.output;
   }
@@ -469,6 +484,7 @@ export class VirtualCrewCore {
     this.altitudeMonitor.reset();
     this.approachMonitor.reset();
     this.rolloutMonitor.reset();
+    this.transitionMonitor.reset();
     this.approach.complete();
     this.goAround.complete();
   }

@@ -10,7 +10,7 @@ import {
   KeyEvents,
   SimVarValueType,
 } from '@microsoft/msfs-sdk';
-import { NXDataStore, PilotSeat, PilotSeatEvents } from '@flybywiresim/fbw-sdk';
+import { Arinc429Word, NXDataStore, PilotSeat, PilotSeatEvents } from '@flybywiresim/fbw-sdk';
 import {
   VirtualCrewButtonEvents,
   VirtualCrewButtonLocalVars,
@@ -27,7 +27,15 @@ import {
   VirtualCrewVoices,
   VirtualCrewWorkflows,
 } from '../../../shared/src/VirtualCrew';
-import { AircraftSnapshot, CrewAction, CrewRole, CrewSeat, CrewSpeech, CrewVoice } from './VirtualCrewTypes';
+import {
+  AircraftSnapshot,
+  BaroSnapshot,
+  CrewAction,
+  CrewRole,
+  CrewSeat,
+  CrewSpeech,
+  CrewVoice,
+} from './VirtualCrewTypes';
 import { VoicePlayer } from './VoicePlayer';
 import { EclState, EcpButton } from './checklists/ChecklistRunner';
 import { CoreContext, CoreOutput, VirtualCrewCore } from './VirtualCrewCore';
@@ -77,6 +85,9 @@ const FLAPS_LEVER_STEP_DELAY_MS = 400;
 /** Deviation of one dot of the localizer and of the glideslope, in degrees (as displayed on the PFD) */
 const LOCALIZER_DOT_DEG = 0.8;
 const GLIDESLOPE_DOT_DEG = 0.4;
+
+/** Hectopascals in one inch of mercury */
+const HPA_PER_INHG = 33.8639;
 
 /** The workflows and flows, in the order of the published workflow index */
 const WORKFLOW_IDS: string[] = [...VirtualCrewWorkflows.map((w) => w.id), ...VirtualCrewFlows.map((f) => f.id)];
@@ -425,11 +436,36 @@ export class VirtualCrew implements Instrument {
     return (VirtualCrewVoices as readonly string[]).includes(value ?? '') ? (value as CrewVoice) : fallback;
   }
 
+  /**
+   * Reads an ARINC 429 word of the FMS
+   * @param name the local variable
+   * @returns the value, undefined if not in normal operation
+   */
+  private static arincValue(name: string): number | undefined {
+    const word = Arinc429Word.fromSimVarValue(name);
+    return word.isNormalOperation() ? word.value : undefined;
+  }
+
+  /**
+   * Reads the barometric reference of one side of the FCU
+   * @param side the side
+   * @returns the reference, in hectopascals
+   */
+  private readBaro(side: 'L' | 'R'): BaroSnapshot {
+    const get = (name: string) => SimVar.GetSimVarValue(`L:A32NX_FCU_EFIS_${side}_DISPLAY_BARO_${name}`, 'number');
+    const inHg = get('IS_INHG') === 1;
+    const value = get('VALUE');
+    return { std: get('IS_STD') === 1, hpa: inHg ? value * HPA_PER_INHG : value, inHg };
+  }
+
   private readAircraft(): AircraftSnapshot {
     const get = (name: string, unit: string = SimVarValueType.Number) => SimVar.GetSimVarValue(name, unit);
     const tla = [1, 2, 3, 4].map((engine) => get(`L:A32NX_AUTOTHRUST_TLA:${engine}`));
     const locValid = get('L:A32NX_RADIO_RECEIVER_LOC_IS_VALID') === 1;
     const gsValid = get('L:A32NX_RADIO_RECEIVER_GS_IS_VALID') === 1;
+    // the pilot monitoring sits in the seat of the virtual crew member
+    const pmSide = this.virtualSeat === 'CAPT' ? 'L' : 'R';
+    const pfSide = pmSide === 'L' ? 'R' : 'L';
 
     return {
       onGround: get('SIM ON GROUND', SimVarValueType.Bool) === 1,
@@ -467,6 +503,10 @@ export class VirtualCrew implements Instrument {
       fcuAltitude: get('L:A32NX_FCU_AFS_DISPLAY_ALT_VALUE'),
       localizerDots: locValid ? get('L:A32NX_RADIO_RECEIVER_LOC_DEVIATION') / LOCALIZER_DOT_DEG : undefined,
       glideslopeDots: gsValid ? get('L:A32NX_RADIO_RECEIVER_GS_DEVIATION') / GLIDESLOPE_DOT_DEG : undefined,
+      transitionAltitude: VirtualCrew.arincValue('L:A32NX_FM1_TRANS_ALT'),
+      transitionLevel: VirtualCrew.arincValue('L:A32NX_FM1_TRANS_LVL'),
+      destinationQnh: get('L:A32NX_DESTINATION_QNH', 'Millibar'),
+      baro: { pf: this.readBaro(pfSide), pm: this.readBaro(pmSide), pmSide },
       briefedLandingFlaps: this.read(BriefingVars.LandingFlaps),
       brakes: {
         left: get('L:A32NX_LEFT_BRAKE_PEDAL_INPUT'),

@@ -28,6 +28,7 @@ import {
   VirtualCrewSettingKeys,
   VirtualCrewStatusLocalVars,
   VirtualCrewWorkflows,
+  virtualCrewWorkflowAwayMinutes,
 } from '../../../../shared/src/VirtualCrew';
 
 /** The preflight workflows and the flows, in the order of the published workflow index */
@@ -375,8 +376,11 @@ const PreflightSchedule: FC<{ elapsedS: number; runningWorkflowId: string | unde
   <div className="mt-2 w-full divide-y divide-theme-accent text-lg">
     {VirtualCrewWorkflows.map((workflow) => {
       const own = workflow.seat === userSeat;
-      const started = elapsedS >= workflow.preflightMinute * 60;
-      const running = workflow.id === runningWorkflowId;
+      // a crew member away from the cockpit (walkaround) is busy until they come back
+      const endS = (workflow.preflightMinute + virtualCrewWorkflowAwayMinutes(workflow)) * 60;
+      const away = !own && elapsedS >= workflow.preflightMinute * 60 && elapsedS < endS;
+      const started = elapsedS >= endS;
+      const running = workflow.id === runningWorkflowId || away;
       let state: string;
       let stateClass: string;
       if (running) {
@@ -468,6 +472,18 @@ export const CrewPage: FC = () => {
   const isBriefingDone = briefingDone === 1;
   const isApproachBriefingDone = approachBriefingDone === 1;
   const preparing = currentPhase === VirtualCrewFlightPhase.Idle || currentPhase === VirtualCrewFlightPhase.Preflight;
+  // a crew member away from the cockpit during the preflight (walkaround)
+  const preflightElapsedS = VIRTUAL_CREW_PREFLIGHT_DURATION_S - remaining;
+  const awayWorkflow =
+    currentPhase === VirtualCrewFlightPhase.Preflight
+      ? VirtualCrewWorkflows.find(
+          (w) =>
+            w.seat !== userSeat &&
+            virtualCrewWorkflowAwayMinutes(w) > 0 &&
+            preflightElapsedS >= w.preflightMinute * 60 &&
+            preflightElapsedS < (w.preflightMinute + virtualCrewWorkflowAwayMinutes(w)) * 60,
+        )
+      : undefined;
   const nextActionLabel = VirtualCrewNextActions[nextAction]?.label ?? VirtualCrewNextActions[0].label;
 
   const clearBriefings = () =>
@@ -511,7 +527,11 @@ export const CrewPage: FC = () => {
               {nextActionLabel}
             </p>
             <p className="mt-1 text-xl text-theme-unselected">
-              {runningWorkflow ? `${runningWorkflow.seat ?? ''} ${runningWorkflow.name}` : 'No crew member busy'}
+              {runningWorkflow
+                ? `${runningWorkflow.seat ?? ''} ${runningWorkflow.name}`
+                : awayWorkflow
+                  ? `${awayWorkflow.seat} ${awayWorkflow.name} (outside)`
+                  : 'No crew member busy'}
             </p>
             <ChecklistStatus
               available={checklistAvailable}

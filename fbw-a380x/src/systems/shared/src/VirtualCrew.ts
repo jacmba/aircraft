@@ -272,13 +272,23 @@ export const VirtualCrewWorkflows = [
   { id: 'initialPowerUp', name: 'Initial power up', seat: 'FO', preflightMinute: 0 },
   { id: 'aircraftStatus', name: 'Aircraft status verification', seat: 'CAPT', preflightMinute: 2 },
   { id: 'fireTests', name: 'Fire tests', seat: 'FO', preflightMinute: 4 },
-  { id: 'overheadPanel', name: 'Overhead panel preparation', seat: 'FO', preflightMinute: 8 },
-  { id: 'pedestal', name: 'Main instrument panel and pedestal', seat: 'FO', preflightMinute: 15 },
-  { id: 'glareshield', name: 'Glareshield preparation', seat: 'FO', preflightMinute: 22 },
+  // the first officer is outside during the walkaround, and comes back after the duration
+  { id: 'walkaround', name: 'Exterior walkaround', seat: 'FO', preflightMinute: 6, durationMinutes: 6 },
+  { id: 'overheadPanel', name: 'Overhead panel preparation', seat: 'FO', preflightMinute: 13 },
+  { id: 'pedestal', name: 'Main instrument panel and pedestal', seat: 'FO', preflightMinute: 18 },
+  { id: 'glareshield', name: 'Glareshield preparation', seat: 'FO', preflightMinute: 23 },
   { id: 'fmsCrosscheck', name: 'FMS and AFS CP crosscheck', seat: 'CAPT', preflightMinute: 28 },
 ] as const;
 
 export type VirtualCrewWorkflowId = (typeof VirtualCrewWorkflows)[number]['id'];
+
+/**
+ * Duration of a workflow during which the crew member is away (e.g. the exterior walkaround), in minutes
+ * @param workflow the workflow definition
+ * @returns the duration, 0 for a workflow performed in the cockpit
+ */
+export const virtualCrewWorkflowAwayMinutes = (workflow: (typeof VirtualCrewWorkflows)[number]): number =>
+  'durationMinutes' in workflow ? workflow.durationMinutes : 0;
 
 /**
  * Data of the takeoff briefing which is not available from the FMGS, entered in the flyPad.

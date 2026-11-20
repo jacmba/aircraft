@@ -1245,7 +1245,6 @@
         <Sound WwiseData="true" WwiseEvent="traffic_traffic" NodeName="SOUND_WIPER_L" />
         <Sound WwiseData="true" WwiseEvent="TCAS_sys_test_OK" NodeName="SOUND_WIPER_L" />
 
-        <!-- A380X virtual crew voices, package FBW_A380X_VCREW (tools/virtual-crew-voices) -->
         <Sound WwiseData="true" WwiseEvent="vcrew_male_takeoff" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_thrust_set" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_one_hundred_knots" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
@@ -1271,7 +1270,6 @@
         <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_checked" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_on" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_set" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_set_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_please_check" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_engine" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_start_valve_open" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
@@ -1327,12 +1325,7 @@
         <Sound WwiseData="true" WwiseEvent="vcrew_male_cl_batteries" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_off" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_neutral" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_checked_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_confirmed_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_set_for_takeoff" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_conf_one_plus_f_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_conf_two_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_conf_three_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_num_zero" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_num_one" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_num_two" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
@@ -1439,6 +1432,19 @@
         <Sound WwiseData="true" WwiseEvent="vcrew_male_go_ahead" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_no_questions" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_male_taxi_lights_off" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_confirmed" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_conf_one_plus_f" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_conf_two" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_resp_conf_three" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_transition" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_altimeter_standard" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_qnh" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_lets_get_started" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_going_with_power_up" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_walkaround_going_out" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_okay" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_walkaround_back" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_male_thank_you" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_takeoff" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_thrust_set" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_one_hundred_knots" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
@@ -1464,7 +1470,6 @@
         <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_checked" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_on" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_set" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_set_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_please_check" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_engine" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_start_valve_open" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
@@ -1520,12 +1525,7 @@
         <Sound WwiseData="true" WwiseEvent="vcrew_female_cl_batteries" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_off" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_neutral" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_checked_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_confirmed_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_set_for_takeoff" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_conf_one_plus_f_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_conf_two_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
-        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_conf_three_both" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_num_zero" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_num_one" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_num_two" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
@@ -1632,6 +1632,19 @@
         <Sound WwiseData="true" WwiseEvent="vcrew_female_go_ahead" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_no_questions" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
         <Sound WwiseData="true" WwiseEvent="vcrew_female_taxi_lights_off" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_confirmed" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_conf_one_plus_f" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_conf_two" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_resp_conf_three" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_transition" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_altimeter_standard" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_qnh" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_lets_get_started" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_going_with_power_up" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_walkaround_going_out" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_okay" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_walkaround_back" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
+        <Sound WwiseData="true" WwiseEvent="vcrew_female_thank_you" NodeName="PEDALS_LEFT" ViewPoint="Inside" />
 
     </AvionicSounds>
 

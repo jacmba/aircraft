@@ -7,8 +7,9 @@ import {
   VirtualCrewCommand,
   VirtualCrewFlightPhase,
   VirtualCrewWorkflows,
+  virtualCrewWorkflowAwayMinutes,
 } from '../../../shared/src/VirtualCrew';
-import { AircraftSnapshot, CrewAction, CrewSeat, FmgcPhase, SimVarReader } from './VirtualCrewTypes';
+import { AircraftSnapshot, CrewOutput, CrewSeat, FmgcPhase, SimVarReader } from './VirtualCrewTypes';
 import { Workflow } from './workflows/Workflow';
 import { WorkflowRunner } from './workflows/WorkflowRunner';
 import { InitialPowerUpWorkflow } from './workflows/InitialPowerUpWorkflow';
@@ -19,6 +20,8 @@ import {
   GlareshieldWorkflow,
   OverheadPanelWorkflow,
   PedestalWorkflow,
+  WalkaroundReturnWorkflow,
+  WalkaroundWorkflow,
 } from './workflows/PreflightWorkflows';
 
 /** A workflow performed at a given time after the start of the preflight */
@@ -33,6 +36,7 @@ const workflowsById = new Map<string, Workflow>(
     InitialPowerUpWorkflow,
     AircraftStatusWorkflow,
     FireTestsWorkflow,
+    WalkaroundWorkflow,
     OverheadPanelWorkflow,
     PedestalWorkflow,
     GlareshieldWorkflow,
@@ -41,13 +45,19 @@ const workflowsById = new Map<string, Workflow>(
 );
 
 /** The preflight schedule, as defined in the shared VirtualCrewWorkflows (also shown in the flyPad) */
-export const DefaultPreflightSchedule: PreflightEvent[] = VirtualCrewWorkflows.map((definition) => {
+export const DefaultPreflightSchedule: PreflightEvent[] = VirtualCrewWorkflows.flatMap((definition) => {
   const workflow = workflowsById.get(definition.id);
   if (workflow === undefined) {
     throw new Error(`[VirtualCrew] workflow ${definition.id} is not implemented`);
   }
-  return { atS: definition.preflightMinute * 60, workflow };
-});
+  const events: PreflightEvent[] = [{ atS: definition.preflightMinute * 60, workflow }];
+  const awayMinutes = virtualCrewWorkflowAwayMinutes(definition);
+  if (awayMinutes > 0) {
+    // the crew member comes back to the cockpit, the countdown can be accelerated while they are away
+    events.push({ atS: (definition.preflightMinute + awayMinutes) * 60, workflow: WalkaroundReturnWorkflow });
+  }
+  return events;
+}).sort((a, b) => a.atS - b.atS);
 
 /** Information needed by the phase manager at each update */
 export interface FlightPhaseContext {
@@ -272,9 +282,9 @@ export class FlightPhaseManager {
   /**
    * Advances the phase and the workflows
    * @param context the current context
-   * @returns the actions of the virtual crew member on the aircraft
+   * @returns what the virtual crew member does and says in the workflows
    */
-  public update(context: FlightPhaseContext): CrewAction[] {
+  public update(context: FlightPhaseContext): CrewOutput {
     const delta =
       this.lastUpdate === undefined ? 0 : Math.min(MAX_TIME_STEP_MS, Math.max(0, context.now - this.lastUpdate));
     this.lastUpdate = context.now;
@@ -289,7 +299,7 @@ export class FlightPhaseManager {
       this.startDueEvents(context);
     }
 
-    const actions = this.runner.update(context.now, context.read).actions;
+    const output = this.runner.update(context.now, context.read);
 
     if (
       this.currentPhase === VirtualCrewFlightPhase.Preflight &&
@@ -328,7 +338,7 @@ export class FlightPhaseManager {
       this.advance(context);
     }
 
-    return actions;
+    return output;
   }
 
   /**

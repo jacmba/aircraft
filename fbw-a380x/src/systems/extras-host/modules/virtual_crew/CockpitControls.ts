@@ -35,6 +35,21 @@ export const AUTOBRAKE_ARMED_MODE_RTO = 6;
 const TCAS_ALERT_LEVEL = { STBY: 0, TA: 1, TARA: 2 } as const;
 
 export const CockpitControls = {
+  /**
+   * Barometric reference of one side of the FCU: pulled for STD, pushed for QNH and set to the value (the value is
+   * sent in sixteenths of hectopascal, like KOHLSMAN_SET)
+   * @param side the side of the FCU
+   * @param std true for STD, false for QNH
+   * @param hpa the QNH, in hectopascals
+   * @param currentlyStd true if the side is currently on STD
+   */
+  baro: (side: 'L' | 'R', std: boolean, hpa: number, currentlyStd: boolean): CrewAction[] =>
+    std
+      ? [{ type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_BARO_PULL` }]
+      : [
+          ...(currentlyStd ? [{ type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_BARO_PUSH` } as const] : []),
+          { type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_BARO_SET`, value: Math.round(hpa * 16) },
+        ],
   strobe: (position: keyof typeof STROBE_POSITIONS): CrewAction[] => [
     { type: 'SET_LOCAL_VAR', name: 'L:LIGHTING_STROBE_0', value: STROBE_POSITIONS[position] },
   ],
