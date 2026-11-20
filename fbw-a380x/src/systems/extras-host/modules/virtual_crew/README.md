@@ -3,6 +3,9 @@
 A virtual crew member following the FBW A380X SOP, in a button mode: the user is the pilot flying (PF) in the seat
 of the camera, the virtual crew member is the pilot monitoring (PM).
 
+The user manual is [`fbw-a380x/docs/virtual-crew/README.md`](../../../../../docs/virtual-crew/README.md) (PDF built with
+`tools/virtual-crew-manual`).
+
 - The PM performs the flows of the SOP, makes the callouts (e.g. "Thrust set", "V1", "Positive climb",
   "Localizer alive", "One thousand to go", "Reverse green") and reads the checklists of the ECL.
 - The **primary button** does the next thing of the SOP, shown on the Crew page of the flyPad: respond to the
