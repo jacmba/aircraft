@@ -32,7 +32,9 @@ export type CrewAction =
   /** Publishes an event on the synced event bus, e.g. a setting of the MFD SURV page */
   | { type: 'BUS_EVENT'; topic: string; value: boolean | number }
   /** Sets the seat belts signs, only toggled if not in the requested position */
-  | { type: 'SEAT_BELTS'; on: boolean };
+  | { type: 'SEAT_BELTS'; on: boolean }
+  /** Sets the wing lights, only toggled if not in the requested position */
+  | { type: 'WING_LIGHTS'; on: boolean };
 
 /** Reads a simulator variable, e.g. 'L:A32NX_EXT_PWR_AVAIL:1' */
 export type SimVarReader = (name: string) => number;

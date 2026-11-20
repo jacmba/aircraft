@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 
 import { NXDataStore, PilotSeat } from '@flybywiresim/fbw-sdk';
 import { usePersistentProperty, useSimVar } from '@flybywiresim/fbw-sdk-react';
-import { SimpleInput, useAppSelector } from '@flybywiresim/flypad';
+import { SelectInput, SimpleInput, useAppSelector } from '@flybywiresim/flypad';
 import { useArinc429Var } from '@instruments/common/arinc429';
 import {
   VIRTUAL_CREW_PREFLIGHT_ACCELERATION,
@@ -172,9 +172,13 @@ const BriefingField: FC<{
   placeholder: string;
   disabled: boolean;
   fmsValue?: string;
-}> = ({ storageKey, label, placeholder, disabled, fmsValue }) => {
+  options?: readonly string[];
+  /** Opens the list of options above the field, for the fields at the bottom of the card */
+  dropdownOnTop?: boolean;
+}> = ({ storageKey, label, placeholder, disabled, fmsValue, options, dropdownOnTop }) => {
   const [value, setValue] = usePersistentProperty(storageKey, '');
   const fromFms = value === '' && !!fmsValue;
+  const shown = fromFms ? fmsValue : value;
 
   return (
     <div className="flex flex-row items-center justify-between py-1">
@@ -182,14 +186,29 @@ const BriefingField: FC<{
         {label}
         {fromFms && <span className="ml-3 text-lg text-theme-highlight">FMS</span>}
       </span>
-      <SimpleInput
-        className="w-96"
-        value={fromFms ? fmsValue : value}
-        placeholder={placeholder}
-        uppercase
-        disabled={disabled}
-        onChange={(newValue) => setValue(newValue === fmsValue ? '' : newValue)}
-      />
+      {options ? (
+        <SelectInput
+          className="w-96"
+          value={shown}
+          options={[
+            { value: '', displayValue: '-' },
+            ...options.map((option) => ({ value: option, displayValue: option })),
+          ]}
+          maxHeight={300}
+          dropdownOnTop={dropdownOnTop}
+          disabled={disabled}
+          onChange={(newValue) => setValue(newValue === fmsValue ? '' : String(newValue))}
+        />
+      ) : (
+        <SimpleInput
+          className="w-96"
+          value={shown}
+          placeholder={placeholder}
+          uppercase
+          disabled={disabled}
+          onChange={(newValue) => setValue(newValue === fmsValue ? '' : newValue)}
+        />
+      )}
     </div>
   );
 };
@@ -242,7 +261,8 @@ const useFmsApproachDefaults = (): Record<'landingRunway' | 'minimum', string> =
 
 /** Approach speed of the FMS, shown in the approach briefing */
 const FmsApproachData: FC = () => {
-  const [vapp] = useSimVar('L:A32NX_SPEEDS_VAPP', 'knots', 1000);
+  // written by the FMS as a plain number of knots: read in knots, it would be converted from m/s
+  const [vapp] = useSimVar('L:A32NX_SPEEDS_VAPP', 'number', 1000);
 
   return (
     <div className="mb-2 flex flex-row justify-between rounded-md bg-theme-accent px-6 py-2">
@@ -282,7 +302,7 @@ const BriefingCard: FC<{
     <Card title={title} className="w-3/5">
       {children}
       <div className="divide-y-2 divide-theme-accent">
-        {fields.map((field) => (
+        {fields.map((field, index) => (
           <BriefingField
             key={field.key}
             storageKey={field.key}
@@ -290,6 +310,8 @@ const BriefingCard: FC<{
             placeholder={field.placeholder}
             disabled={!editable}
             fmsValue={field.fmsDefault ? fmsDefaults[field.fmsDefault] : undefined}
+            options={field.options}
+            dropdownOnTop={index >= fields.length / 2}
           />
         ))}
       </div>

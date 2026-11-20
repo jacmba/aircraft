@@ -37,7 +37,8 @@ const flapsOrder = (
  * Configuration for landing, FBW A380X SOP "Precision Approach" / "Non Precision Approach":
  * - PF | FLAPS 1 ... ORDER, PM | FLAPS 1 ... SELECT (below VFE of the next position, otherwise "check speed")
  * - PF | FLAPS 2 ... ORDER, PM | FLAPS 2 ... SELECT
- * - PF | LANDING GEAR DOWN ... ORDER, PM | LANDING GEAR ... DOWN, GROUND SPOILERS ... ARM
+ * - PF | LANDING GEAR DOWN ... ORDER, PM | LANDING GEAR ... DOWN, GROUND SPOILERS ... ARM, RWY TURN OFF LIGHTS
+ *   ... ON, NOSE LIGHT ... T.O
  * - PF | FLAPS 3 ... ORDER, PM | FLAPS 3 ... SELECT
  * - PF | FLAPS FULL ... ORDER, PM | FLAPS FULL ... SELECT (not for a landing in CONF 3, as briefed)
  *
@@ -55,7 +56,13 @@ export const ApproachProcedure: Procedure = {
       done: (aircraft) => !aircraft.gearLeverUp,
       order: 'gearDown',
       confirmation: 'gearDown',
-      actions: () => [...CockpitControls.gearDown(), ...CockpitControls.groundSpoilersArm(true)],
+      // the landing lights are on since 10000 ft, the taxi and runway turnoff lights (with the taxi camera lights)
+      actions: () => [
+        ...CockpitControls.gearDown(),
+        ...CockpitControls.groundSpoilersArm(true),
+        ...CockpitControls.runwayTurnoffLights(true),
+        ...CockpitControls.noseLight('TO'),
+      ],
       unavailableLine: 'checkSpeed',
     },
     flapsOrder('approachFlapsThree', 3, 'flapsThree'),

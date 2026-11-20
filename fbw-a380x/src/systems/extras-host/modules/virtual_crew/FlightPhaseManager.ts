@@ -67,6 +67,8 @@ export interface FlightPhaseContext {
   aircraft?: AircraftSnapshot;
   /** The after takeoff flow is completed, the climb starts */
   afterTakeoffFlowDone?: boolean;
+  /** The taxi lights have been switched off on request of the pilot flying, approaching the stand */
+  taxiLightsOffDone?: boolean;
   /** The parking checklist is completed, the aircraft is secured next */
   parkingChecklistDone?: boolean;
   /** The securing checklist is completed, the flight is over */
@@ -444,7 +446,12 @@ export class FlightPhaseManager {
         break;
 
       case VirtualCrewFlightPhase.AfterLanding:
-        if (aircraft.parkingBrakeSet && engines.length > 0 && engines.every((engine) => engine.state === 0)) {
+        // at the stand: taxi lights off and parking brake set (also without the taxi lights call, once the engines are
+        // off)
+        if (
+          aircraft.parkingBrakeSet &&
+          (context.taxiLightsOffDone || (engines.length > 0 && engines.every((engine) => engine.state === 0)))
+        ) {
           this.currentPhase = VirtualCrewFlightPhase.Parking;
         }
         break;

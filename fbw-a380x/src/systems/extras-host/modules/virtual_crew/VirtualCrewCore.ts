@@ -276,6 +276,8 @@ export class VirtualCrewCore {
         return 'flightControlCheck';
       case 'brakeCheck':
         return 'brakeCheck';
+      case 'taxiLightsOff':
+        return 'taxiLightsOff';
       case 'order': {
         const id = action.engine.nextOrderId;
         return VirtualCrewNextActions.find((next) => next.id === id)?.id ?? 'none';
@@ -344,6 +346,10 @@ export class VirtualCrewCore {
       case 'brakeCheck':
         this.output.speech.push(...this.brakeCheck.start());
         break;
+      case 'taxiLightsOff':
+        this.output.speech.push({ role: 'PF', line: 'taxiLightsOff' });
+        this.flows.start('taxiLightsOffFlow', context.now);
+        break;
       case 'order': {
         const announcingTakeoff = action.engine === this.takeoff && this.takeoff.nextOrderId === 'announceTakeoff';
         this.add(action.engine.input('PRIMARY', context.aircraft));
@@ -391,6 +397,7 @@ export class VirtualCrewCore {
     | { kind: 'lineUpFlow' }
     | { kind: 'flightControlCheck' }
     | { kind: 'brakeCheck' }
+    | { kind: 'taxiLightsOff' }
     | { kind: 'order'; engine: VirtualCrewEngine }
     | { kind: 'none' } {
     if (this.flightControlCheck.isRunning || this.brakeCheck.isRunning) {
@@ -411,6 +418,14 @@ export class VirtualCrewCore {
     // once the aircraft starts moving, after the flight control check, before the taxi checklist
     if (this.phase === VirtualCrewFlightPhase.Taxi && this.flightControlCheck.isDone && !this.brakeCheck.isDone) {
       return { kind: 'brakeCheck' };
+    }
+    // approaching the stand, after the after landing flow
+    if (
+      this.phase === VirtualCrewFlightPhase.AfterLanding &&
+      this.flows.isDone('afterLandingFlow') &&
+      !this.flows.isStarted('taxiLightsOffFlow')
+    ) {
+      return { kind: 'taxiLightsOff' };
     }
     if (
       this.phase === VirtualCrewFlightPhase.Taxi &&
@@ -467,6 +482,7 @@ export class VirtualCrewCore {
       landingConfiguration: !aircraft.gearLeverUp && aircraft.flapsLeverIndex >= landingFlaps,
       flightControlsChecked: this.flightControlCheck.isDone,
       brakesChecked: this.brakeCheck.isDone,
+      enginesOff: (aircraft.engines ?? []).every((engine) => engine.state === 0),
     };
   }
 
@@ -485,6 +501,7 @@ export class VirtualCrewCore {
       crewBusy: this.checklists.runner.running || this.flows.busy,
       aircraft,
       afterTakeoffFlowDone: this.flows.isDone('afterTakeoffFlow'),
+      taxiLightsOffDone: this.flows.isDone('taxiLightsOffFlow'),
       parkingChecklistDone: this.checklists.isDone('parking'),
       securingChecklistDone: this.checklists.isDone('securing'),
     };

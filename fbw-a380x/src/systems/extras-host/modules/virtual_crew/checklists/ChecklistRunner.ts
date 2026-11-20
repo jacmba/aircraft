@@ -226,9 +226,23 @@ export class ChecklistRunner {
 
   /** Verification of the current item by the pilot monitoring */
   private verify(checklist: Checklist, ecl: EclState, read: SimVarReader): boolean {
-    const item = checklist.items[this.itemIndex];
+    const memoItems = checklist.items[this.itemIndex].memoItems ?? 0;
+    if (memoItems > 0) {
+      // the ECAM memo: every item of the memo, the sub headline itself is never checked by the FWS
+      for (let i = this.itemIndex + 1; i <= this.itemIndex + memoItems; i++) {
+        if (!this.verifyItem(checklist, i, ecl, read)) {
+          return false;
+        }
+      }
+      return true;
+    }
+    return this.verifyItem(checklist, this.itemIndex, ecl, read);
+  }
+
+  private verifyItem(checklist: Checklist, index: number, ecl: EclState, read: SimVarReader): boolean {
+    const item = checklist.items[index];
     if (item.sensed) {
-      return ecl.checklists.get(checklist.eclId)?.itemsChecked[this.itemIndex] === true || item.verify?.(read) === true;
+      return ecl.checklists.get(checklist.eclId)?.itemsChecked[index] === true || item.verify?.(read) === true;
     }
     return item.verify?.(read) ?? true;
   }
@@ -337,7 +351,9 @@ export class ChecklistRunner {
   }
 
   private nextItem(checklist: Checklist, now: number): void {
-    this.itemIndex = ChecklistRunner.firstItemFrom(checklist, this.itemIndex + 1);
+    // the items of the ECAM memo were verified with the memo
+    const memoItems = checklist.items[this.itemIndex]?.memoItems ?? 0;
+    this.itemIndex = ChecklistRunner.firstItemFrom(checklist, this.itemIndex + 1 + memoItems);
     if (this.itemIndex >= checklist.items.length) {
       this.itemIndex = checklist.items.length - 1;
       this.enter(VirtualCrewChecklistStep.Completing, now + NEXT_ITEM_DELAY_MS);

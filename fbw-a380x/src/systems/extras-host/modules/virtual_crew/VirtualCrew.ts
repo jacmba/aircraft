@@ -384,6 +384,11 @@ export class VirtualCrew implements Instrument {
       case 'BUS_EVENT':
         this.bus.getPublisher<Record<string, boolean | number>>().pub(action.topic, action.value, true);
         break;
+      case 'WING_LIGHTS':
+        if ((SimVar.GetSimVarValue('A:LIGHT WING', SimVarValueType.Bool) === 1) !== action.on) {
+          SimVar.SetSimVarValue('K:TOGGLE_WING_LIGHTS', SimVarValueType.Number, 0);
+        }
+        break;
       case 'SEAT_BELTS': {
         // the switch position and the signs, as the aircraft presets of the flyPad
         const on = SimVar.GetSimVarValue('A:CABIN SEATBELTS ALERT SWITCH', SimVarValueType.Bool) === 1;

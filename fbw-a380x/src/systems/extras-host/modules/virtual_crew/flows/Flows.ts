@@ -11,10 +11,14 @@ import { BriefingVars } from '../briefing/BriefingData';
 /*
  * Flows of the pilot monitoring (the virtual crew member) after the preflight, FBW A380X SOP. The flows are performed
  * once per flight when their trigger occurs, or on request of the pilot flying (line-up flow). The items of the
- * captain are left to the user: APU, FMS, seat belts signs, anti ice, nose and runway turnoff lights for the taxi.
+ * captain are left to the user: APU (except after landing), FMS, seat belts signs, anti ice, nose and runway turnoff
+ * lights for the taxi out.
  */
 
 const isOn = (read: SimVarReader, name: string) => read(name) === 1;
+
+/** Night, dusk or dawn: the wing lights are used */
+const isNight = (read: SimVarReader) => read(CockpitStates.timeOfDay) !== 1;
 
 /** The seat belts signs are switched to the other position, twice off and on again: the signal to the cabin */
 const seatBeltsToggle = (item: string): WorkflowStep => ({
@@ -67,6 +71,7 @@ export const LineUpFlow: Workflow = {
   seat: 'FO',
   steps: [
     { item: 'STROBE ... ON', durationMs: 1500, actions: CockpitControls.strobe('ON') },
+    { item: 'NOSE LIGHT ... T.O', durationMs: 1000, actions: CockpitControls.noseLight('TO') },
     { item: 'TCAS ... TA/RA', durationMs: 2000, actions: CockpitControls.tcas('TARA') },
     seatBeltsToggle('SEAT BELTS ... CYCLE (1)'),
     seatBeltsToggle('SEAT BELTS ... CYCLE (2)'),
@@ -100,7 +105,15 @@ export const AfterTakeoffFlow: Workflow = {
 export const ClimbTenThousandFlow: Workflow = {
   id: 'climbTenThousandFlow',
   seat: 'FO',
-  steps: [{ item: 'LANDING LIGHTS ... OFF', durationMs: 2000, actions: CockpitControls.landingLights(false) }],
+  steps: [
+    { item: 'LANDING LIGHTS ... OFF', durationMs: 2000, actions: CockpitControls.landingLights(false) },
+    {
+      item: 'WING LIGHTS ... OFF',
+      durationMs: 1000,
+      condition: (read) => isOn(read, CockpitStates.wingLights),
+      actions: CockpitControls.wingLights(false),
+    },
+  ],
 };
 
 /** SOP "Descent Preparation", the autobrake as briefed */
@@ -124,6 +137,12 @@ export const DescentTenThousandFlow: Workflow = {
   steps: [
     { item: 'LANDING LIGHTS ... ON', durationMs: 2000, actions: CockpitControls.landingLights(true) },
     {
+      item: 'WING LIGHTS ... ON (night)',
+      durationMs: 1000,
+      condition: isNight,
+      actions: CockpitControls.wingLights(true),
+    },
+    {
       item: 'CABIN CREW ... ADVISE',
       durationMs: 1500,
       speech: [{ role: 'PM', line: 'paSeatsForLanding' }],
@@ -141,7 +160,73 @@ export const AfterLandingFlow: Workflow = {
     { item: 'LANDING LIGHTS ... OFF', durationMs: 1500, actions: CockpitControls.landingLights(false) },
     { item: 'NOSE LIGHT ... TAXI', durationMs: 1000, actions: CockpitControls.noseLight('TAXI') },
     { item: 'TCAS ... STBY', durationMs: 2000, actions: CockpitControls.tcas('STBY') },
+    { item: 'TRANSPONDER ... STBY', durationMs: 1500, actions: CockpitControls.transponderAuto(false) },
+    {
+      item: 'FD ... OFF',
+      durationMs: 1500,
+      condition: (read) => isOn(read, CockpitStates.flightDirector),
+      actions: CockpitControls.flightDirectorPush(),
+    },
+    ...(['L', 'R'] as const).map(
+      (side): WorkflowStep => ({
+        item: `LS (${side}) ... OFF`,
+        durationMs: 1000,
+        condition: (read) => isOn(read, CockpitStates.lsButton(side)),
+        actions: CockpitControls.lsPush(side),
+      }),
+    ),
+    ...(['L', 'R'] as const).map(
+      (side): WorkflowStep => ({
+        item: `WX / TERR ON ND (${side}) ... OFF`,
+        durationMs: 1000,
+        condition: (read) => read(CockpitStates.ndOverlay(side)) !== 0,
+        actions: CockpitControls.ndOverlayOff(side),
+      }),
+    ),
     verify('RADAR ... OFF (not automated yet)', 1500),
+    {
+      item: 'APU MASTER SW ... ON',
+      durationMs: 2000,
+      condition: (read) => !isOn(read, CockpitStates.apuMaster),
+      actions: CockpitControls.apuMaster(true),
+    },
+    {
+      item: 'APU START ... ON',
+      durationMs: 3000,
+      condition: (read) => !isOn(read, CockpitStates.apuAvailable),
+      actions: CockpitControls.apuStart(),
+    },
+  ],
+};
+
+/** SOP "Taxi in", on request of the pilot flying ("taxi lights off") approaching the stand */
+export const TaxiLightsOffFlow: Workflow = {
+  id: 'taxiLightsOffFlow',
+  seat: 'FO',
+  steps: [
+    { item: 'NOSE LIGHT ... OFF', durationMs: 1500, actions: CockpitControls.noseLight('OFF') },
+    // the taxi camera lights are part of the runway turnoff lights
+    { item: 'RWY TURN OFF LIGHTS ... OFF', durationMs: 1000, actions: CockpitControls.runwayTurnoffLights(false) },
+    {
+      item: 'WING LIGHTS ... OFF',
+      durationMs: 1000,
+      condition: (read) => isOn(read, CockpitStates.wingLights),
+      actions: CockpitControls.wingLights(false),
+    },
+  ],
+};
+
+/** SOP "Parking", once the parking brake is set, with the APU available */
+export const ParkingFlow: Workflow = {
+  id: 'parkingFlow',
+  seat: 'FO',
+  steps: [
+    {
+      item: 'APU BLEED ... ON',
+      durationMs: 2000,
+      condition: (read) => !isOn(read, CockpitStates.apuBleed),
+      actions: CockpitControls.apuBleed(true),
+    },
   ],
 };
 
@@ -205,6 +290,11 @@ export const FlowDefinitions: Record<VirtualCrewFlowId, FlowDefinition> = {
       c.aircraft.verticalSpeed < 0,
   },
   afterLandingFlow: { workflow: AfterLandingFlow, trigger: (c) => inPhase(c, VirtualCrewFlightPhase.AfterLanding) },
+  taxiLightsOffFlow: { workflow: TaxiLightsOffFlow },
+  parkingFlow: {
+    workflow: ParkingFlow,
+    trigger: (c) => inPhase(c, VirtualCrewFlightPhase.Parking) && isOn(c.read, CockpitStates.apuAvailable),
+  },
 };
 
 /**

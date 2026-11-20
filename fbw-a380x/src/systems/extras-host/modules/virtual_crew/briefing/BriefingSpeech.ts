@@ -15,7 +15,8 @@ import {
 import { BriefedAntiIce, BriefingValues, parseAntiIce, parseAutobrake, parseLandingFlaps } from './BriefingData';
 
 /*
- * The briefings spoken by the pilot flying, composed from the data of the flyPad and of the FMS. Free text fields
+ * The briefings spoken by the pilot flying, composed from the data of the flyPad and of the FMS: "are you ready for
+ * the departure briefing?" "go ahead", the briefing, "any questions?" "no questions". Free text fields
  * (taxi route, engine failure procedure, threats) are not spoken word for word: a generic phrase confirms them.
  */
 
@@ -32,6 +33,12 @@ const value = (values: BriefingValues, key: string) => (values[key] ?? '').trim(
 /** A sentence: the parts are chained, the normal pause follows the last part */
 const sentence = (...parts: VoiceLineId[]): CrewSpeech[] =>
   parts.map((line, i) => ({ role: 'PF', line, pauseAfterMs: i < parts.length - 1 ? CHAINED_PAUSE_MS : undefined }));
+
+/** The pilot flying asks if the pilot monitoring is ready, who answers "go ahead" */
+const opening = (question: VoiceLineId): CrewSpeech[] => [...sentence(question), { role: 'PM', line: 'goAhead' }];
+
+/** "Any questions?", "no questions" */
+const closing = (): CrewSpeech[] => [...sentence('brEndOfBriefing'), { role: 'PM', line: 'noQuestions' }];
 
 const speed = (knots: number | undefined): VoiceLineId[] =>
   knots !== undefined && knots > 0 ? digitWords(Math.round(knots).toString()) : [];
@@ -100,7 +107,7 @@ const ifEntered = (text: string, line: VoiceLineId) => (text !== '' ? sentence(l
 export function takeoffBriefingSpeech(values: BriefingValues, fms: BriefingFmsData): CrewSpeech[] {
   const v = (key: string) => value(values, `A380X_VCREW_BRIEFING_${key}`);
   return [
-    ...sentence('brTakeoffBriefing'),
+    ...opening('brReadyDeparture'),
     ...atis(v('ATIS')),
     ...runwayCondition(v('RWY_COND')),
     ...takeoffThrust(v('TO_THRUST')),
@@ -115,7 +122,7 @@ export function takeoffBriefingSpeech(values: BriefingValues, fms: BriefingFmsDa
     ...antiIce(v('ANTI_ICE')),
     ...sentence('brEngineFailure'),
     ...ifEntered(v('THREATS'), 'brThreats'),
-    ...sentence('brEndOfBriefing'),
+    ...closing(),
   ];
 }
 
@@ -158,7 +165,7 @@ export function approachBriefingSpeech(values: BriefingValues, fms: BriefingFmsD
   const v = (key: string) => value(values, `A380X_VCREW_APPR_${key}`);
   const autobrake = parseAutobrake(v('AUTOBRAKE'));
   return [
-    ...sentence('brApproachBriefing'),
+    ...opening('brReadyApproach'),
     ...atis(v('ATIS')),
     ...withWords('brLandingRunway', runwayWords(v('RWY'))),
     ...approachType(v('TYPE')),
@@ -171,6 +178,6 @@ export function approachBriefingSpeech(values: BriefingValues, fms: BriefingFmsD
     ...withWords('brGoAroundAltitude', altitudeWords(v('GA_ALT'))),
     ...ifEntered(v('TAXI_IN'), 'brTaxiIn'),
     ...ifEntered(v('THREATS'), 'brThreats'),
-    ...sentence('brEndOfBriefing'),
+    ...closing(),
   ];
 }

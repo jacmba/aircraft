@@ -290,6 +290,8 @@ export interface VirtualCrewBriefingField {
   placeholder: string;
   /** Data of the FMGS (or of the flight plan) used as value as long as the pilot does not enter another one */
   fmsDefault?: 'takeoffThrust' | 'takeoffFlaps' | 'landingRunway' | 'minimum';
+  /** The values which can be selected, the field is free text if not defined */
+  options?: readonly string[];
 }
 
 export const VirtualCrewBriefingFields: readonly VirtualCrewBriefingField[] = [
@@ -303,15 +305,26 @@ export const VirtualCrewBriefingFields: readonly VirtualCrewBriefingField[] = [
     key: 'A380X_VCREW_BRIEFING_TO_FLAPS',
     label: 'Takeoff flaps',
     placeholder: 'e.g. 1+F, 2, 3',
+    options: ['1+F', '2', '3'],
     fmsDefault: 'takeoffFlaps',
   },
   { key: 'A380X_VCREW_BRIEFING_ATIS', label: 'ATIS information', placeholder: 'e.g. K' },
-  { key: 'A380X_VCREW_BRIEFING_RWY_COND', label: 'Runway condition', placeholder: 'e.g. DRY, WET' },
+  {
+    key: 'A380X_VCREW_BRIEFING_RWY_COND',
+    label: 'Runway condition',
+    placeholder: 'e.g. DRY, WET',
+    options: ['DRY', 'WET', 'CONTAMINATED'],
+  },
   { key: 'A380X_VCREW_BRIEFING_TAXI', label: 'Taxi route', placeholder: 'e.g. A B5 holding point 27R' },
   { key: 'A380X_VCREW_BRIEFING_CLEARED_ALT', label: 'Cleared initial altitude', placeholder: 'e.g. 6000 ft' },
   { key: 'A380X_VCREW_BRIEFING_SQUAWK', label: 'Squawk', placeholder: 'e.g. 4721' },
   { key: 'A380X_VCREW_BRIEFING_DEP_FREQ', label: 'Departure frequency', placeholder: 'e.g. 125.800' },
-  { key: 'A380X_VCREW_BRIEFING_ANTI_ICE', label: 'Anti ice', placeholder: 'e.g. OFF, ENG, ENG + WING' },
+  {
+    key: 'A380X_VCREW_BRIEFING_ANTI_ICE',
+    label: 'Anti ice',
+    placeholder: 'e.g. OFF, ENG, ENG + WING',
+    options: ['OFF', 'ENG', 'ENG + WING'],
+  },
   { key: 'A380X_VCREW_BRIEFING_EO_PROC', label: 'Engine failure procedure', placeholder: 'e.g. EOSID, straight ahead' },
   { key: 'A380X_VCREW_BRIEFING_THREATS', label: 'Threats / remarks', placeholder: 'e.g. heavy traffic, MEL items' },
 ];
@@ -328,10 +341,25 @@ export const VirtualCrewApproachBriefingFields: readonly VirtualCrewBriefingFiel
     placeholder: 'e.g. 27R',
     fmsDefault: 'landingRunway',
   },
-  { key: 'A380X_VCREW_APPR_TYPE', label: 'Approach', placeholder: 'e.g. ILS, RNP, VOR, VISUAL' },
+  {
+    key: 'A380X_VCREW_APPR_TYPE',
+    label: 'Approach',
+    placeholder: 'e.g. ILS, RNP, VOR, VISUAL',
+    options: ['ILS', 'GLS', 'RNP', 'VOR', 'NDB', 'LOC', 'VISUAL'],
+  },
   { key: 'A380X_VCREW_APPR_MINIMUM', label: 'Minimum', placeholder: 'e.g. BARO 560, RADIO 200', fmsDefault: 'minimum' },
-  { key: 'A380X_VCREW_APPR_LDG_FLAPS', label: 'Landing flaps', placeholder: 'e.g. 3, FULL' },
-  { key: 'A380X_VCREW_APPR_AUTOBRAKE', label: 'Autobrake', placeholder: 'e.g. LOW, 2, 3, HI, BTV' },
+  {
+    key: 'A380X_VCREW_APPR_LDG_FLAPS',
+    label: 'Landing flaps',
+    placeholder: 'e.g. 3, FULL',
+    options: ['3', 'FULL'],
+  },
+  {
+    key: 'A380X_VCREW_APPR_AUTOBRAKE',
+    label: 'Autobrake',
+    placeholder: 'e.g. LOW, 2, 3, HI, BTV',
+    options: ['BTV', 'LOW', '2', '3', 'HI'],
+  },
   { key: 'A380X_VCREW_APPR_GA_ALT', label: 'Go-around altitude', placeholder: 'e.g. 5000 ft' },
   { key: 'A380X_VCREW_APPR_TAXI_IN', label: 'Taxi-in route', placeholder: 'e.g. B, A to stand 214' },
   { key: 'A380X_VCREW_APPR_THREATS', label: 'Threats / remarks', placeholder: 'e.g. wind shear, terrain' },
@@ -360,6 +388,8 @@ export const VirtualCrewFlows = [
   { id: 'approachBriefingFlow', name: 'Approach preparation', trigger: 'Approach briefing performed' },
   { id: 'descentTenThousandFlow', name: 'Descent through 10000 ft', trigger: 'Descending through 10000 ft' },
   { id: 'afterLandingFlow', name: 'After landing flow', trigger: 'Runway vacated, ground spoilers disarmed' },
+  { id: 'taxiLightsOffFlow', name: 'Taxi lights off', trigger: 'Primary button after landing' },
+  { id: 'parkingFlow', name: 'Parking flow', trigger: 'Parking brake set, APU available' },
 ] as const;
 
 export type VirtualCrewFlowId = (typeof VirtualCrewFlows)[number]['id'];
@@ -388,6 +418,7 @@ export const VirtualCrewNextActions = [
   { id: 'respond', label: 'Respond to the checklist' },
   { id: 'flightControlCheck', label: 'Flight control check' },
   { id: 'brakeCheck', label: 'Brake check' },
+  { id: 'taxiLightsOff', label: 'Taxi lights off' },
 ] as const;
 
 export type VirtualCrewNextActionId = (typeof VirtualCrewNextActions)[number]['id'];
@@ -417,6 +448,11 @@ export const VirtualCrewTestActions = [
   { id: 'autobrakeLow', label: 'Autobrake LOW' },
   { id: 'autobrakeDisarm', label: 'Autobrake DISARM' },
   { id: 'toConfigTest', label: 'T.O CONFIG test' },
+  { id: 'wingLightsOn', label: 'Wing lights ON' },
+  { id: 'wingLightsOff', label: 'Wing lights OFF' },
+  { id: 'apuBleedOn', label: 'APU bleed ON' },
+  { id: 'flightDirectorPush', label: 'FD push' },
+  { id: 'lsPush', label: 'LS push (both)' },
 ] as const;
 
 export type VirtualCrewTestActionId = (typeof VirtualCrewTestActions)[number]['id'];

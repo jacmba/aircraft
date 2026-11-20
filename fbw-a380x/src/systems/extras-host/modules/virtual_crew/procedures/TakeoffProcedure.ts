@@ -70,7 +70,7 @@ export const TakeoffProcedure: Procedure = {
       // the takeoff was started without the announcement, the crew continues with the callouts
       done: takeoffRollStarted,
       order: 'takeoff',
-      // the pilot monitoring switches the takeoff lights on
+      // the pilot monitoring switches the landing lights on, and the nose light to T.O if the line-up flow was not done
       actions: () => [...CockpitControls.landingLights(true), ...CockpitControls.noseLight('TO')],
     },
     {

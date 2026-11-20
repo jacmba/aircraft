@@ -206,17 +206,8 @@
     "clRadar": {
       "text": "Radar?"
     },
-    "clGroundSpoilers": {
-      "text": "Ground spoilers?"
-    },
-    "clFlaps": {
-      "text": "Flaps?"
-    },
     "clAutobrake": {
       "text": "Autobrake?"
-    },
-    "clTakeoffConfig": {
-      "text": "Takeoff config?"
     },
     "clTakeoffRunway": {
       "text": "Takeoff runway?"
@@ -226,9 +217,6 @@
     },
     "clMinimum": {
       "text": "Minimum?"
-    },
-    "clLandingGear": {
-      "text": "Landing gear?"
     },
     "clParkingBrakeOrChocks": {
       "text": "Parking brake or chocks?"
@@ -263,26 +251,8 @@
     "respCheckedBoth": {
       "text": "Checked, both."
     },
-    "respArmed": {
-      "text": "Armed."
-    },
-    "respRto": {
-      "text": "R T O."
-    },
-    "respNormal": {
-      "text": "Normal."
-    },
     "respConfirmedBoth": {
       "text": "Confirmed, both."
-    },
-    "respDown": {
-      "text": "Down."
-    },
-    "respFull": {
-      "text": "Full."
-    },
-    "respThree": {
-      "text": "Three."
     },
     "respSetForTakeoff": {
       "text": "Set for takeoff."
@@ -385,12 +355,6 @@
     },
     "apVisual": {
       "text": "visual"
-    },
-    "brTakeoffBriefing": {
-      "text": "Takeoff briefing."
-    },
-    "brApproachBriefing": {
-      "text": "Approach briefing."
     },
     "brInformation": {
       "text": "We have information"
@@ -595,6 +559,30 @@
     },
     "pressureZero": {
       "text": "Pressure zero."
+    },
+    "clEcamMemo": {
+      "text": "ECAM memo?"
+    },
+    "respTakeoffNoBlue": {
+      "text": "Takeoff, no blue."
+    },
+    "respLandingNoBlue": {
+      "text": "Landing, no blue."
+    },
+    "brReadyDeparture": {
+      "text": "Are you ready for the departure briefing?"
+    },
+    "brReadyApproach": {
+      "text": "Are you ready for the approach briefing?"
+    },
+    "goAhead": {
+      "text": "Go ahead."
+    },
+    "noQuestions": {
+      "text": "No questions."
+    },
+    "taxiLightsOff": {
+      "text": "Taxi lights off."
     }
   }
 }

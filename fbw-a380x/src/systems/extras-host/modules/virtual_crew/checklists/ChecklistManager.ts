@@ -18,6 +18,8 @@ export interface ChecklistContext {
   flightControlsChecked?: boolean;
   /** The brake check has been performed (or skipped) */
   brakesChecked?: boolean;
+  /** All the engines are off */
+  enginesOff?: boolean;
 }
 
 /**
@@ -30,7 +32,7 @@ export interface ChecklistContext {
  * - LINE-UP at the holding point, once the line-up flow is performed
  * - APPROACH during the descent or the approach
  * - LANDING once the approach checklist is completed and the aircraft is configured for landing
- * - PARKING once the engines are off, SECURING THE AIRCRAFT after the parking checklist
+ * - PARKING at the stand once the engines are off, SECURING THE AIRCRAFT after the parking checklist
  */
 export class ChecklistManager {
   public readonly runner = new ChecklistRunner();
@@ -121,7 +123,7 @@ export class ChecklistManager {
           (context.landingConfiguration ?? false)
         );
       case 'parking':
-        return phase === VirtualCrewFlightPhase.Parking;
+        return phase === VirtualCrewFlightPhase.Parking && (context.enginesOff ?? true);
       case 'securing':
         return phase === VirtualCrewFlightPhase.Securing && this.done.has('parking');
       default:

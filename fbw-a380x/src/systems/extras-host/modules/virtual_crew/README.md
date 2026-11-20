@@ -28,26 +28,28 @@ for the taxi.
 | Engine start | engine mode selector IGN START | callouts: start valve open, fuel flow, engine stable | |
 | After start | engine mode selector NORM | ground spoilers ARM, flaps as briefed, autobrake RTO | AFTER START C/L, then the flight control check: "Flight control check", the PM announces full up/down, left/right, rudder and neutral (secondary button: skip) |
 | Taxi | parking brake released, moving | | brake check: "Brake check", the PM announces "pressure zero" when the brakes are pressed (secondary button: skip); then TAXI C/L (the PM presses T.O CONFIG), then the line-up flow |
-| Before takeoff | primary button at the holding point | strobe ON, TCAS TA/RA, seat belts double cycle, "Cabin crew, seats for takeoff" | LINE-UP C/L, then "Takeoff" (PM: landing and nose lights) |
+| Before takeoff | primary button at the holding point | strobe ON, nose light T.O, TCAS TA/RA, seat belts double cycle, "Cabin crew, seats for takeoff" | LINE-UP C/L, then "Takeoff" (PM: landing and nose lights) |
 | Takeoff | thrust levers FLX/TOGA | callouts up to positive climb | gear up, flaps 1, flaps 0 |
 | After takeoff | flaps retracted | ground spoilers DISARM, nose and runway turnoff lights OFF | |
-| Climb | after takeoff flow | landing lights OFF passing 10000 ft, one thousand to go | |
+| Climb | after takeoff flow | landing lights and wing lights OFF passing 10000 ft, one thousand to go | |
 | Cruise | FMGC | | |
 | Descent preparation | approach briefing (flyPad) | autobrake as briefed | |
-| Descent / Approach | FMGC | landing lights ON and "Cabin crew, seats for landing" passing 10000 ft; localizer and glideslope alive; speed | APPROACH C/L, then flaps 1, flaps 2, gear down (and ground spoilers ARM), flaps 3, flaps full, then LANDING C/L |
+| Descent / Approach | FMGC | landing lights ON, wing lights ON at night and "Cabin crew, seats for landing" passing 10000 ft; localizer and glideslope alive; speed | APPROACH C/L, then flaps 1, flaps 2, gear down (and ground spoilers ARM, runway turnoff lights ON, nose light T.O), flaps 3, flaps full, then LANDING C/L |
 | Go-around | FMGC | positive climb | "Go around, flaps", gear up, flaps 1, flaps 0 |
 | Landing | below 100 ft RA | callouts: spoilers, reverse green, decel, seventy knots | |
-| After landing | ground spoilers disarmed, below 30 kt, turned off the runway | flaps 0, strobe AUTO, landing lights OFF, nose light TAXI, TCAS STBY | |
-| Parking | engines off, parking brake set | | PARKING C/L |
+| After landing | ground spoilers disarmed, below 30 kt, turned off the runway | flaps 0, strobe AUTO, landing lights OFF, nose light TAXI, TCAS and XPDR STBY, FD, LS and ND overlays OFF, APU start | "Taxi lights off": nose, runway turnoff (and taxi camera) and wing lights OFF |
+| Parking | parking brake set after "taxi lights off" (or engines off) | APU bleed ON once the APU is available | PARKING C/L once the engines are off |
 | Securing | PARKING C/L | | SECURING THE AIRCRAFT C/L, then the flight ends |
 
-Only the checklists of the ECL are read. The PM verifies the items: sensed items by the FWS or in the cockpit, some
+Only the checklists of the ECL are read. The items of the ECAM memo (T.O and LDG) are read as one item: "ECAM memo"
+... "takeoff, no blue" / "landing, no blue", verified together. The PM verifies the items: sensed items by the FWS or in the cockpit, some
 non sensed items through the aircraft state or the briefings (anti ice, autobrake, minimum of the FMS).
 
 ## Briefings
 
 The takeoff briefing (preflight or before start) and the approach briefing (cruise) are entered in the flyPad, with
-the data of the FMS as default values, and spoken by the PF when performed. Free text entries (taxi route, engine
+the data of the FMS as default values, and spoken by the PF when performed: "are you ready for the departure
+briefing?" ... "go ahead", the briefing, "any questions?" ... "no questions". Free text entries (taxi route, engine
 failure procedure, threats) are confirmed with a generic phrase. Numbers, runways, frequencies and letters are spoken
 with the radiotelephony words (`speech/Phrases.ts`). The flows use the briefings: takeoff flaps, anti ice, autobrake,
 landing flaps (FULL or 3).

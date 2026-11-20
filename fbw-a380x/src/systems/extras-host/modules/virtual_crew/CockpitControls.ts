@@ -83,6 +83,29 @@ export const CockpitControls = {
 
   seatBelts: (on: boolean): CrewAction[] => [{ type: 'SEAT_BELTS', on }],
 
+  wingLights: (on: boolean): CrewAction[] => [{ type: 'WING_LIGHTS', on }],
+
+  apuMaster: (on: boolean): CrewAction[] => [
+    { type: 'SET_LOCAL_VAR', name: 'L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON', value: on ? 1 : 0 },
+  ],
+
+  apuStart: (): CrewAction[] => [{ type: 'SET_LOCAL_VAR', name: 'L:A32NX_OVHD_APU_START_PB_IS_ON', value: 1 }],
+
+  apuBleed: (on: boolean): CrewAction[] => [
+    { type: 'SET_LOCAL_VAR', name: 'L:A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON', value: on ? 1 : 0 },
+  ],
+
+  /** Pushes the flight director pushbutton of the FCU (toggle) */
+  flightDirectorPush: (): CrewAction[] => [{ type: 'KEY_EVENT', name: 'A32NX.FCU_FD_PUSH' }],
+
+  /** Pushes the LS pushbutton of an EFIS control panel (toggle) */
+  lsPush: (side: 'L' | 'R'): CrewAction[] => [{ type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_LS_PUSH` }],
+
+  /** Overlay of the ND (WX, TERR) of an EFIS control panel: 0 = none */
+  ndOverlayOff: (side: 'L' | 'R'): CrewAction[] => [
+    { type: 'SET_LOCAL_VAR', name: `L:A380X_EFIS_${side}_ACTIVE_OVERLAY`, value: 0 },
+  ],
+
   groundSpoilersArm: (arm: boolean): CrewAction[] => [
     { type: 'KEY_EVENT', name: 'SPOILERS_ARM_SET', value: arm ? 1 : 0 },
   ],
@@ -109,6 +132,14 @@ export const CockpitStates = {
   runwayTurnoffLights: 'A:LIGHT TAXI:2',
   beacon: 'A:LIGHT BEACON',
   wingLights: 'A:LIGHT WING',
+  /** 0 dawn, 1 day, 2 dusk, 3 night */
+  timeOfDay: 'E:TIME OF DAY',
+  apuAvailable: 'L:A32NX_OVHD_APU_START_PB_IS_AVAILABLE',
+  apuMaster: 'L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON',
+  apuBleed: 'L:A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON',
+  flightDirector: 'L:A32NX_FCU_FD_LIGHT_ON',
+  lsButton: (side: 'L' | 'R') => `L:A380X_EFIS_${side}_LS_BUTTON_IS_ON`,
+  ndOverlay: (side: 'L' | 'R') => `L:A380X_EFIS_${side}_ACTIVE_OVERLAY`,
   seatBelts: 'A:CABIN SEATBELTS ALERT SWITCH',
   groundSpoilersArmed: 'L:A32NX_SPOILERS_ARMED',
   autobrakeArmedMode: 'L:A32NX_AUTOBRAKES_ARMED_MODE',
@@ -149,4 +180,9 @@ export const TestActions: Record<VirtualCrewTestActionId, CrewAction[]> = {
   autobrakeLow: CockpitControls.autobrakeSelector(AutobrakeSelector.Low),
   autobrakeDisarm: CockpitControls.autobrakeSelector(AutobrakeSelector.Disarm),
   toConfigTest: CockpitControls.takeoffConfigTest(),
+  wingLightsOn: CockpitControls.wingLights(true),
+  wingLightsOff: CockpitControls.wingLights(false),
+  apuBleedOn: CockpitControls.apuBleed(true),
+  flightDirectorPush: CockpitControls.flightDirectorPush(),
+  lsPush: [...CockpitControls.lsPush('L'), ...CockpitControls.lsPush('R')],
 };

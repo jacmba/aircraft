@@ -32,8 +32,13 @@ export interface ChecklistItem {
    * not cause a false discrepancy.
    */
   verify?: (read: SimVarReader) => boolean;
-  /** Sub headline of the ECL (e.g. "T.O"), not read and not checked */
+  /** Sub headline of the ECL, not read and not checked */
   headline?: boolean;
+  /**
+   * The item stands for the ECAM memo (sub headline "T.O" or "LDG" of the ECL): it is read as one item ("ECAM memo"
+   * ... "takeoff, no blue") for this number of sensed items following it, which are verified together and not read
+   */
+  memoItems?: number;
   /** Actions of the pilot monitoring while reading the item, e.g. pressing T.O CONFIG */
   actionsWhenRead?: ReturnType<typeof CockpitControls.takeoffConfigTest>;
 }
@@ -50,7 +55,14 @@ export interface Checklist {
   items: ChecklistItem[];
 }
 
-const headline = (name: string): ChecklistItem => ({ name, response: 'respChecked', sensed: true, headline: true });
+/** An item of the ECAM memo, sensed by the FWS, verified with the memo item and not read */
+const memoItem = (name: string, verify?: ChecklistItem['verify']): ChecklistItem => ({
+  name,
+  response: 'respChecked',
+  sensed: true,
+  headline: true,
+  verify,
+});
 
 const isOn = (read: SimVarReader, name: string) => read(name) === 1;
 
@@ -183,43 +195,20 @@ export const TaxiChecklist: Checklist = {
       verify: (read) => read(CockpitStates.flapsLever) >= 1 && read(CockpitStates.flapsLever) <= 3,
     },
     { name: 'RADAR', challenge: 'clRadar', response: 'respOn', sensed: false },
-    headline('T.O'),
     {
-      name: 'SEAT BELTS',
-      challenge: 'clSeatBelts',
-      response: 'respOn',
+      name: 'T.O',
+      challenge: 'clEcamMemo',
+      response: 'respTakeoffNoBlue',
       sensed: true,
-      verify: (read) => isOn(read, CockpitStates.seatBelts),
-    },
-    {
-      name: 'GND SPLRs',
-      challenge: 'clGroundSpoilers',
-      response: 'respArmed',
-      sensed: true,
-      verify: (read) => isOn(read, CockpitStates.groundSpoilersArmed),
-    },
-    {
-      name: 'FLAPS',
-      challenge: 'clFlaps',
-      response: 'respSetForTakeoff',
-      sensed: true,
-      verify: (read) => read(CockpitStates.flapsLever) >= 1 && read(CockpitStates.flapsLever) <= 3,
-    },
-    {
-      name: 'AUTO BRK',
-      challenge: 'clAutobrake',
-      response: 'respRto',
-      sensed: true,
-      verify: (read) => read(CockpitStates.autobrakeArmedMode) === AUTOBRAKE_ARMED_MODE_RTO,
-    },
-    {
-      name: 'T.O CONFIG',
-      challenge: 'clTakeoffConfig',
-      response: 'respNormal',
-      sensed: true,
-      // the pilot monitoring presses T.O CONFIG while reading the item, the FWS senses the result
+      memoItems: 5,
+      // the pilot monitoring presses T.O CONFIG while reading the memo, the FWS senses the result
       actionsWhenRead: CockpitControls.takeoffConfigTest(),
     },
+    memoItem('SEAT BELTS', (read) => isOn(read, CockpitStates.seatBelts)),
+    memoItem('GND SPLRs', (read) => isOn(read, CockpitStates.groundSpoilersArmed)),
+    memoItem('FLAPS', (read) => read(CockpitStates.flapsLever) >= 1 && read(CockpitStates.flapsLever) <= 3),
+    memoItem('AUTO BRK', (read) => read(CockpitStates.autobrakeArmedMode) === AUTOBRAKE_ARMED_MODE_RTO),
+    memoItem('T.O CONFIG'),
   ],
 };
 
@@ -283,35 +272,11 @@ export const LandingChecklist: Checklist = {
   request: 'landingChecklist',
   complete: 'landingChecklistComplete',
   items: [
-    headline('LDG'),
-    {
-      name: 'SEAT BELTS',
-      challenge: 'clSeatBelts',
-      response: 'respOn',
-      sensed: true,
-      verify: (read) => isOn(read, CockpitStates.seatBelts),
-    },
-    {
-      name: 'LDG GEAR',
-      challenge: 'clLandingGear',
-      response: 'respDown',
-      sensed: true,
-      verify: (read) => read(CockpitStates.gearLever) > 0.5,
-    },
-    {
-      name: 'GND SPLRs',
-      challenge: 'clGroundSpoilers',
-      response: 'respArmed',
-      sensed: true,
-      verify: (read) => isOn(read, CockpitStates.groundSpoilersArmed),
-    },
-    {
-      name: 'FLAPS',
-      challenge: 'clFlaps',
-      response: (read) => [read(CockpitStates.flapsLever) >= 4 ? 'respFull' : 'respThree'],
-      sensed: true,
-      verify: (read) => read(CockpitStates.flapsLever) >= 3,
-    },
+    { name: 'LDG', challenge: 'clEcamMemo', response: 'respLandingNoBlue', sensed: true, memoItems: 4 },
+    memoItem('SEAT BELTS', (read) => isOn(read, CockpitStates.seatBelts)),
+    memoItem('LDG GEAR', (read) => read(CockpitStates.gearLever) > 0.5),
+    memoItem('GND SPLRs', (read) => isOn(read, CockpitStates.groundSpoilersArmed)),
+    memoItem('FLAPS', (read) => read(CockpitStates.flapsLever) >= 3),
   ],
 };
 

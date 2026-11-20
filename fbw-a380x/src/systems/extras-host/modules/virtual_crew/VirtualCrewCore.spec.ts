@@ -85,7 +85,7 @@ describe('virtual crew core, a complete flight', () => {
   /** The pilot flying requests the available checklist and responds to every item, the items being as expected */
   const readChecklist = (id: string) => {
     const checklist = Checklists.find((c) => c.id === id)!;
-    checklist.items.forEach((item, i) => item.sensed && !item.headline && ecl.setSensed(checklist.eclId, i, true));
+    checklist.items.forEach((item, i) => item.sensed && ecl.setSensed(checklist.eclId, i, true));
     expect(core.nextAction).toBe(`checklist_${id}`);
     press();
     const completed = () => speech.includes(`PM:${checklist.complete}`);
@@ -134,8 +134,10 @@ describe('virtual crew core, a complete flight', () => {
   const departure = () => {
     expect(command(VirtualCrewCommand.StartTakeoffBriefing)).toBe(true);
     expect(command(VirtualCrewCommand.CompleteTakeoffBriefing)).toBe(true);
+    expect(speech.slice(0, 2)).toEqual(['PF:brReadyDeparture', 'PM:goAhead']);
+    expect(speech.slice(-2)).toEqual(['PF:brEndOfBriefing', 'PM:noQuestions']);
     expect(speech).toEqual(
-      expect.arrayContaining(['PF:brTakeoffBriefing', 'PF:brInformation', 'PF:alphaK', 'PF:brSquawk', 'PF:numFour']),
+      expect.arrayContaining(['PF:brReadyDeparture', 'PF:brInformation', 'PF:alphaK', 'PF:brSquawk', 'PF:numFour']),
     );
     expect(core.phase).toBe(VirtualCrewFlightPhase.BeforeStart);
 
@@ -300,7 +302,7 @@ describe('virtual crew core, a complete flight', () => {
     expect(command(VirtualCrewCommand.CompleteApproachBriefing)).toBe(true);
     expect(core.phase).toBe(VirtualCrewFlightPhase.DescentPreparation);
     expect(speech).toEqual(
-      expect.arrayContaining(['PF:brApproachBriefing', 'PF:numTwo', 'PF:numSeven', 'PF:rwyRight', 'PF:apIls']),
+      expect.arrayContaining(['PF:brReadyApproach', 'PF:numTwo', 'PF:numSeven', 'PF:rwyRight', 'PF:apIls']),
     );
     run(4);
     expect(actions).toContainEqual({ type: 'SET_LOCAL_VAR', name: 'L:A32NX_AUTOBRAKES_SELECTED_MODE', value: 2 });
@@ -373,17 +375,34 @@ describe('virtual crew core, a complete flight', () => {
     // runway vacated: spoilers disarmed, slow, turned off the runway
     Object.assign(aircraft, { groundSpoilersArmed: false, groundSpeed: 15, heading: 0 });
     actions = [];
-    run(12);
+    run(25);
     expect(core.phase).toBe(VirtualCrewFlightPhase.AfterLanding);
     expect(actions).toContainEqual({ type: 'FLAPS_SET', index: 0 });
     expect(actions).toContainEqual({ type: 'BUS_EVENT', topic: 'mfd_tcas_alert_level', value: 0 });
 
-    // parking and securing
+    expect(actions).toContainEqual({ type: 'BUS_EVENT', topic: 'mfd_xpdr_set_auto', value: false });
+    expect(actions).toContainEqual({ type: 'SET_LOCAL_VAR', name: 'L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON', value: 1 });
+
+    // approaching the stand: taxi lights off
+    expect(core.nextAction).toBe('taxiLightsOff');
+    actions = [];
+    press();
+    expect(speech.slice(-1)).toEqual(['PF:taxiLightsOff']);
+    run(5);
+    expect(keyEvents()).toEqual(expect.arrayContaining(['TAXI_LIGHTS_OFF:1', 'TAXI_LIGHTS_OFF:2']));
+
+    // parking brake set at the stand: parking, APU bleed once the APU is available
     Object.assign(aircraft, { parkingBrakeSet: true, groundSpeed: 0 });
+    vars['L:A32NX_OVHD_APU_START_PB_IS_AVAILABLE'] = 1;
+    actions = [];
+    run(3);
+    expect(core.phase).toBe(VirtualCrewFlightPhase.Parking);
+    expect(actions).toContainEqual({ type: 'SET_LOCAL_VAR', name: 'L:A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON', value: 1 });
+    // the parking checklist once the engines are off
+    expect(core.nextAction).toBe('none');
     aircraft.engines = aircraft.engines!.map(() => ({ state: 0, starterValveOpen: false, fuelFlow: 0 }));
     vars['L:A32NX_ENGINE_STATE:1'] = 0;
     run(1);
-    expect(core.phase).toBe(VirtualCrewFlightPhase.Parking);
     readChecklist('parking');
     run(1);
     expect(core.phase).toBe(VirtualCrewFlightPhase.Securing);
