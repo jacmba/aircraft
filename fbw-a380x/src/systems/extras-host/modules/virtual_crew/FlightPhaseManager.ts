@@ -45,19 +45,23 @@ const workflowsById = new Map<string, Workflow>(
 );
 
 /** The preflight schedule, as defined in the shared VirtualCrewWorkflows (also shown in the flyPad) */
-export const DefaultPreflightSchedule: PreflightEvent[] = VirtualCrewWorkflows.flatMap((definition) => {
-  const workflow = workflowsById.get(definition.id);
-  if (workflow === undefined) {
-    throw new Error(`[VirtualCrew] workflow ${definition.id} is not implemented`);
-  }
-  const events: PreflightEvent[] = [{ atS: definition.preflightMinute * 60, workflow }];
-  const awayMinutes = virtualCrewWorkflowAwayMinutes(definition);
-  if (awayMinutes > 0) {
-    // the crew member comes back to the cockpit, the countdown can be accelerated while they are away
-    events.push({ atS: (definition.preflightMinute + awayMinutes) * 60, workflow: WalkaroundReturnWorkflow });
-  }
-  return events;
-}).sort((a, b) => a.atS - b.atS);
+// Array.prototype.flatMap (ES2019) is not available in Coherent GT, which only supports ES2017
+export const DefaultPreflightSchedule: PreflightEvent[] = VirtualCrewWorkflows.reduce<PreflightEvent[]>(
+  (events, definition) => {
+    const workflow = workflowsById.get(definition.id);
+    if (workflow === undefined) {
+      throw new Error(`[VirtualCrew] workflow ${definition.id} is not implemented`);
+    }
+    events.push({ atS: definition.preflightMinute * 60, workflow });
+    const awayMinutes = virtualCrewWorkflowAwayMinutes(definition);
+    if (awayMinutes > 0) {
+      // the crew member comes back to the cockpit, the countdown can be accelerated while they are away
+      events.push({ atS: (definition.preflightMinute + awayMinutes) * 60, workflow: WalkaroundReturnWorkflow });
+    }
+    return events;
+  },
+  [],
+).sort((a, b) => a.atS - b.atS);
 
 /** Information needed by the phase manager at each update */
 export interface FlightPhaseContext {
