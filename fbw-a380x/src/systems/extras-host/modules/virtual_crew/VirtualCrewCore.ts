@@ -9,7 +9,15 @@ import {
   VirtualCrewNextActions,
   VirtualCrewTestActions,
 } from '../../../shared/src/VirtualCrew';
-import { AircraftSnapshot, CrewAction, CrewInput, CrewSeat, CrewSpeech, SimVarReader } from './VirtualCrewTypes';
+import {
+  AircraftSnapshot,
+  CrewAction,
+  CrewInput,
+  CrewSeat,
+  CrewSpeech,
+  isEngineShutDown,
+  SimVarReader,
+} from './VirtualCrewTypes';
 import { ProcedureState, VirtualCrewEngine } from './VirtualCrewEngine';
 import { TakeoffProcedure } from './procedures/TakeoffProcedure';
 import { ApproachProcedure } from './procedures/ApproachProcedure';
@@ -498,7 +506,7 @@ export class VirtualCrewCore {
       landingConfiguration: !aircraft.gearLeverUp && aircraft.flapsLeverIndex >= landingFlaps,
       flightControlsChecked: this.flightControlCheck.isDone,
       brakesChecked: this.brakeCheck.isDone,
-      enginesOff: (aircraft.engines ?? []).every((engine) => engine.state === 0),
+      enginesOff: (aircraft.engines ?? []).every(isEngineShutDown),
     };
   }
 

@@ -9,7 +9,7 @@ import {
   VirtualCrewWorkflows,
   virtualCrewWorkflowAwayMinutes,
 } from '../../../shared/src/VirtualCrew';
-import { AircraftSnapshot, CrewOutput, CrewSeat, FmgcPhase, SimVarReader } from './VirtualCrewTypes';
+import { AircraftSnapshot, CrewOutput, CrewSeat, FmgcPhase, isEngineShutDown, SimVarReader } from './VirtualCrewTypes';
 import { Workflow } from './workflows/Workflow';
 import { WorkflowRunner } from './workflows/WorkflowRunner';
 import { InitialPowerUpWorkflow } from './workflows/InitialPowerUpWorkflow';
@@ -412,7 +412,12 @@ export class FlightPhaseManager {
       case VirtualCrewFlightPhase.Climb:
       case VirtualCrewFlightPhase.Cruise:
       case VirtualCrewFlightPhase.DescentPreparation:
-        if (fmgcPhase === FmgcPhase.Cruise && this.currentPhase === VirtualCrewFlightPhase.Climb) {
+        // the FMGC only enters the cruise at the cruise level: a cruise altitude held (ALT CRZ) is a cruise as well,
+        // e.g. a short flight below the transition altitude
+        if (
+          (fmgcPhase === FmgcPhase.Cruise || aircraft.altCruiseMode === true) &&
+          this.currentPhase === VirtualCrewFlightPhase.Climb
+        ) {
           this.currentPhase = VirtualCrewFlightPhase.Cruise;
         } else if (fmgcPhase === FmgcPhase.Descent) {
           this.currentPhase = VirtualCrewFlightPhase.Descent;
@@ -464,7 +469,7 @@ export class FlightPhaseManager {
         // off)
         if (
           aircraft.parkingBrakeSet &&
-          (context.taxiLightsOffDone || (engines.length > 0 && engines.every((engine) => engine.state === 0)))
+          (context.taxiLightsOffDone || (engines.length > 0 && engines.every(isEngineShutDown)))
         ) {
           this.currentPhase = VirtualCrewFlightPhase.Parking;
         }

@@ -123,7 +123,12 @@ export class ChecklistManager {
           (context.landingConfiguration ?? false)
         );
       case 'parking':
-        return phase === VirtualCrewFlightPhase.Parking && (context.enginesOff ?? true);
+        // after the items of the pilot monitoring at the engine shutdown (fuel pumps off)
+        return (
+          phase === VirtualCrewFlightPhase.Parking &&
+          (context.enginesOff ?? true) &&
+          (context.isFlowDone?.('shutdownFlow') ?? true)
+        );
       case 'securing':
         return phase === VirtualCrewFlightPhase.Securing && this.done.has('parking');
       default:

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { VirtualCrewFlightPhase, VirtualCrewFlowId } from '../../../../shared/src/VirtualCrew';
-import { AircraftSnapshot, CrewOutput, SimVarReader } from '../VirtualCrewTypes';
+import { AircraftSnapshot, CrewOutput, CrewReadVars, isEngineShutDown, SimVarReader } from '../VirtualCrewTypes';
 import { verify, Workflow, WorkflowStep } from '../workflows/Workflow';
 import { WorkflowRunner } from '../workflows/WorkflowRunner';
 import { AUTOBRAKE_ARMED_MODE_RTO, CockpitControls, CockpitStates } from '../CockpitControls';
@@ -16,6 +16,12 @@ import { BriefingVars } from '../briefing/BriefingData';
  */
 
 const isOn = (read: SimVarReader, name: string) => read(name) === 1;
+
+/** The transponder policy of IVAO: AUTO at the line-up and STBY after landing, else AUTO before start and STBY at the parking */
+const ssrPolicyIvao = (read: SimVarReader) => isOn(read, CrewReadVars.SsrPolicyIvao);
+
+/** Difference of the THS position with the takeoff THS of the FMS above which the first officer sets it, in degrees */
+const THS_TOLERANCE_DEG = 0.2;
 
 /** Night, dusk or dawn: the wing lights are used */
 const isNight = (read: SimVarReader) => read(CockpitStates.timeOfDay) !== 1;
@@ -33,7 +39,12 @@ export const BeforeStartFlow: Workflow = {
   seat: 'FO',
   steps: [
     verify('WINDOWS AND DOORS ... CHECK CLOSED', 2000),
-    { item: 'TRANSPONDER ... AUTO', durationMs: 2000, actions: CockpitControls.transponderAuto(true) },
+    {
+      item: 'TRANSPONDER ... AUTO (SSR policy VATSIM)',
+      durationMs: 2000,
+      condition: (read) => !ssrPolicyIvao(read),
+      actions: CockpitControls.transponderAuto(true),
+    },
   ],
 };
 
@@ -60,7 +71,16 @@ export const AfterStartFlow: Workflow = {
       condition: (read) => read(CockpitStates.autobrakeArmedMode) !== AUTOBRAKE_ARMED_MODE_RTO,
       actions: CockpitControls.autobrakeRto(),
     },
-    verify('PITCH TRIM ... CHECK', 2000),
+    {
+      // the THS for the takeoff, computed by the FMS from the THS FOR (CG) of the PERF TO page
+      item: 'PITCH TRIM ... CHECK / SET FOR TAKEOFF',
+      durationMs: 2000,
+      condition: (read) => {
+        const target = read(CrewReadVars.TakeoffThs);
+        return !Number.isNaN(target) && Math.abs(read(CrewReadVars.ThsPosition) - target) > THS_TOLERANCE_DEG;
+      },
+      actions: (read) => CockpitControls.pitchTrim(read(CrewReadVars.TakeoffThs)),
+    },
     verify('RUDDER TRIM ... CHECK ZERO', 1500),
   ],
 };
@@ -72,6 +92,12 @@ export const LineUpFlow: Workflow = {
   steps: [
     { item: 'STROBE ... ON', durationMs: 1500, actions: CockpitControls.strobe('ON') },
     { item: 'NOSE LIGHT ... T.O', durationMs: 1000, actions: CockpitControls.noseLight('TO') },
+    {
+      item: 'TRANSPONDER ... AUTO (SSR policy IVAO)',
+      durationMs: 1500,
+      condition: ssrPolicyIvao,
+      actions: CockpitControls.transponderAuto(true),
+    },
     { item: 'TCAS ... TA/RA', durationMs: 2000, actions: CockpitControls.tcas('TARA') },
     seatBeltsToggle('SEAT BELTS ... CYCLE (1)'),
     seatBeltsToggle('SEAT BELTS ... CYCLE (2)'),
@@ -160,7 +186,12 @@ export const AfterLandingFlow: Workflow = {
     { item: 'LANDING LIGHTS ... OFF', durationMs: 1500, actions: CockpitControls.landingLights(false) },
     { item: 'NOSE LIGHT ... TAXI', durationMs: 1000, actions: CockpitControls.noseLight('TAXI') },
     { item: 'TCAS ... STBY', durationMs: 2000, actions: CockpitControls.tcas('STBY') },
-    { item: 'TRANSPONDER ... STBY', durationMs: 1500, actions: CockpitControls.transponderAuto(false) },
+    {
+      item: 'TRANSPONDER ... STBY (SSR policy IVAO)',
+      durationMs: 1500,
+      condition: ssrPolicyIvao,
+      actions: CockpitControls.transponderAuto(false),
+    },
     {
       item: 'FD ... OFF',
       durationMs: 1500,
@@ -230,6 +261,35 @@ export const ParkingFlow: Workflow = {
   ],
 };
 
+/** SOP "Parking", the items of the pilot monitoring once the engines are shut down */
+export const ShutdownFlow: Workflow = {
+  id: 'shutdownFlow',
+  seat: 'FO',
+  steps: [
+    ...[1, 2, 3, 4].map(
+      (engine): WorkflowStep => ({
+        item: `ENG ${engine} ANTI ICE ... OFF`,
+        durationMs: 800,
+        condition: (read) => isOn(read, CockpitStates.engineAntiIce(engine)),
+        actions: (read) => CockpitControls.engineAntiIce(engine, false, read),
+      }),
+    ),
+    {
+      item: 'WING ANTI ICE ... OFF',
+      durationMs: 1000,
+      condition: (read) => isOn(read, CockpitStates.wingAntiIce),
+      actions: (read) => CockpitControls.wingAntiIce(false, read),
+    },
+    { item: 'FUEL PUMPS ... OFF', durationMs: 3000, actions: (read) => CockpitControls.fuelPumps(false, read) },
+    {
+      item: 'TRANSPONDER ... STBY (SSR policy VATSIM)',
+      durationMs: 1500,
+      condition: (read) => !ssrPolicyIvao(read),
+      actions: CockpitControls.transponderAuto(false),
+    },
+  ],
+};
+
 /** State of the flight relevant for the flow triggers */
 export interface FlowContext {
   now: number;
@@ -294,6 +354,13 @@ export const FlowDefinitions: Record<VirtualCrewFlowId, FlowDefinition> = {
   parkingFlow: {
     workflow: ParkingFlow,
     trigger: (c) => inPhase(c, VirtualCrewFlightPhase.Parking) && isOn(c.read, CockpitStates.apuAvailable),
+  },
+  shutdownFlow: {
+    workflow: ShutdownFlow,
+    trigger: (c) => {
+      const engines = c.aircraft.engines ?? [];
+      return inPhase(c, VirtualCrewFlightPhase.Parking) && engines.length > 0 && engines.every(isEngineShutDown);
+    },
   },
 };
 

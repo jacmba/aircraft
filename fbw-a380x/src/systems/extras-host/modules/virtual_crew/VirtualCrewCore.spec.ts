@@ -385,7 +385,8 @@ describe('virtual crew core, a complete flight', () => {
     expect(actions).toContainEqual({ type: 'FLAPS_SET', index: 0 });
     expect(actions).toContainEqual({ type: 'BUS_EVENT', topic: 'mfd_tcas_alert_level', value: 0 });
 
-    expect(actions).toContainEqual({ type: 'BUS_EVENT', topic: 'mfd_xpdr_set_auto', value: false });
+    // SSR policy VATSIM: the transponder stays on until the parking
+    expect(actions).not.toContainEqual({ type: 'BUS_EVENT', topic: 'mfd_xpdr_set_auto', value: false });
     expect(actions).toContainEqual({ type: 'SET_LOCAL_VAR', name: 'L:A32NX_OVHD_APU_MASTER_SW_PB_IS_ON', value: 1 });
 
     // approaching the stand: taxi lights off
@@ -403,17 +404,40 @@ describe('virtual crew core, a complete flight', () => {
     run(3);
     expect(core.phase).toBe(VirtualCrewFlightPhase.Parking);
     expect(actions).toContainEqual({ type: 'SET_LOCAL_VAR', name: 'L:A32NX_OVHD_PNEU_APU_BLEED_PB_IS_ON', value: 1 });
-    // the parking checklist once the engines are off
+    // the engines shut down (still shutting down until the EGT has cooled): fuel pumps and transponder off, then the
+    // parking checklist
     expect(core.nextAction).toBe('none');
-    aircraft.engines = aircraft.engines!.map(() => ({ state: 0, starterValveOpen: false, fuelFlow: 0 }));
-    vars['L:A32NX_ENGINE_STATE:1'] = 0;
+    aircraft.engines = aircraft.engines!.map(() => ({ state: 4, starterValveOpen: false, fuelFlow: 0 }));
+    vars['L:A32NX_ENGINE_STATE:1'] = 4;
+    vars['A:CIRCUIT CONNECTION ON:2'] = 1;
+    vars['A:CIRCUIT CONNECTION ON:64'] = 1;
+    actions = [];
     run(1);
+    expect(core.nextAction).toBe('none');
+    run(10);
+    expect(actions).toContainEqual({
+      type: 'KEY_EVENT',
+      name: 'ELECTRICAL_BUS_TO_CIRCUIT_CONNECTION_TOGGLE',
+      value: 2,
+      value2: 1,
+    });
+    expect(keyEvents()).not.toContain('ELECTRICAL_BUS_TO_CIRCUIT_CONNECTION_TOGGLE:3');
+    expect(actions).toContainEqual({ type: 'BUS_EVENT', topic: 'mfd_xpdr_set_auto', value: false });
+    expect(core.nextAction).toBe('checklist_parking');
     readChecklist('parking');
     run(1);
     expect(core.phase).toBe(VirtualCrewFlightPhase.Securing);
     readChecklist('securing');
     run(1);
     expect(core.phase).toBe(VirtualCrewFlightPhase.Idle);
+  });
+
+  it('enters the cruise with ALT CRZ on the FMA, below the cruise phase of the FMGC', () => {
+    departure();
+    expect(core.phase).toBe(VirtualCrewFlightPhase.Climb);
+    Object.assign(aircraft, { altitude: 8000, verticalSpeed: 0, fmgcPhase: FmgcPhase.Climb, altCruiseMode: true });
+    run(1);
+    expect(core.phase).toBe(VirtualCrewFlightPhase.Cruise);
   });
 
   it('flies a go-around with the orders of the pilot flying', () => {

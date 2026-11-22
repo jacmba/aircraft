@@ -13,7 +13,18 @@ export const VirtualCrewSettingKeys = {
   PrimaryButtonEvent: 'CONFIG_A380X_VCREW_PRIMARY_EVENT',
   /** Sim event used as secondary button, see {@link VirtualCrewButtonEvents} */
   SecondaryButtonEvent: 'CONFIG_A380X_VCREW_SECONDARY_EVENT',
+  /** When the transponder is set to AUTO and back to STBY, see {@link VirtualCrewSsrPolicies} */
+  SsrPolicy: 'CONFIG_A380X_VCREW_SSR_POLICY',
 } as const;
+
+/**
+ * Transponder (SSR) policy of the online network flown:
+ * - VATSIM: AUTO in the before start flow, STBY in the parking flow (the transponder stays on during the taxi)
+ * - IVAO: AUTO in the line-up flow, STBY in the after landing flow
+ */
+export const VirtualCrewSsrPolicies = ['VATSIM', 'IVAO'] as const;
+
+export type VirtualCrewSsrPolicy = (typeof VirtualCrewSsrPolicies)[number];
 
 export const VirtualCrewVoices = ['male', 'female'] as const;
 
@@ -40,6 +51,7 @@ export const VirtualCrewDefaults = {
   firstOfficerVoice: 'female' as VirtualCrewVoiceSetting,
   primaryButtonEvent: VirtualCrewButtonNone,
   secondaryButtonEvent: VirtualCrewButtonNone,
+  ssrPolicy: 'VATSIM' as VirtualCrewSsrPolicy,
 };
 
 /**
@@ -400,6 +412,7 @@ export const VirtualCrewFlows = [
   { id: 'afterLandingFlow', name: 'After landing flow', trigger: 'Runway vacated, ground spoilers disarmed' },
   { id: 'taxiLightsOffFlow', name: 'Taxi lights off', trigger: 'Primary button after landing' },
   { id: 'parkingFlow', name: 'Parking flow', trigger: 'Parking brake set, APU available' },
+  { id: 'shutdownFlow', name: 'After engine shutdown', trigger: 'Engines shut down at the parking' },
 ] as const;
 
 export type VirtualCrewFlowId = (typeof VirtualCrewFlows)[number]['id'];

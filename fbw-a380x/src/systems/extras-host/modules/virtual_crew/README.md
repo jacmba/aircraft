@@ -27,22 +27,26 @@ for the taxi.
 |---------------------|------------|---------------------|----------------|
 | Preflight (optional, 40 min) | flyPad ("OK, let's get it started") | workflows of the PM seat, at their time, exterior walkaround after the fire tests (6 min outside, the countdown can be accelerated) | COCKPIT PREPARATION C/L after the takeoff briefing |
 | Takeoff briefing | flyPad, without preflight | | |
-| Before start | end of the preflight or briefing | transponder AUTO once BEFORE START C/L done and beacon ON | BEFORE START C/L |
+| Before start | end of the preflight or briefing | transponder AUTO (SSR policy VATSIM) once BEFORE START C/L done and beacon ON | BEFORE START C/L |
 | Engine start | engine mode selector IGN START | callouts: start valve open, fuel flow, engine stable | |
-| After start | engine mode selector NORM | ground spoilers ARM, flaps as briefed, autobrake RTO | AFTER START C/L, then the flight control check: "Flight control check", the PM announces full up/down, left/right, rudder and neutral (secondary button: skip) |
+| After start | engine mode selector NORM | ground spoilers ARM, flaps as briefed, autobrake RTO, pitch trim to the takeoff THS of the FMS (THS FOR) | AFTER START C/L, then the flight control check: "Flight control check", the PM announces full up/down, left/right, rudder and neutral (secondary button: skip) |
 | Taxi | parking brake released, moving | | brake check: "Brake check", the PM announces "pressure zero" when the brakes are pressed (secondary button: skip); then TAXI C/L (the PM presses T.O CONFIG), then the line-up flow |
-| Before takeoff | primary button at the holding point | strobe ON, nose light T.O, TCAS TA/RA, seat belts double cycle, "Cabin crew, seats for takeoff" | LINE-UP C/L, then "Takeoff" (PM: landing and nose lights) |
+| Before takeoff | primary button at the holding point | strobe ON, nose light T.O, transponder AUTO (SSR policy IVAO), TCAS TA/RA, seat belts double cycle, "Cabin crew, seats for takeoff" | LINE-UP C/L, then "Takeoff" (PM: landing and nose lights) |
 | Takeoff | thrust levers FLX/TOGA | callouts up to positive climb | gear up, flaps 1, flaps 0 |
 | After takeoff | flaps retracted | ground spoilers DISARM, nose and runway turnoff lights OFF | |
 | Climb | after takeoff flow | "Transition" at the transition altitude, then "Altimeter standard" (PF once on STD, PM after setting theirs); landing lights and wing lights OFF passing 10000 ft, one thousand to go | |
-| Cruise | FMGC | | |
+| Cruise | FMGC cruise phase, or ALT CRZ / ALT CRZ* on the FMA | | |
 | Descent preparation | approach briefing (flyPad) | autobrake as briefed | |
 | Descent / Approach | FMGC | "Transition" at the transition level, then "QNH ..." (PF once set to the APPR PERF QNH, PM after setting theirs); landing lights ON, wing lights ON at night and "Cabin crew, seats for landing" passing 10000 ft; localizer and glideslope alive; speed | APPROACH C/L, then flaps 1, flaps 2, gear down (and ground spoilers ARM, runway turnoff lights ON, nose light T.O), flaps 3, flaps full, then LANDING C/L |
 | Go-around | FMGC | positive climb | "Go around, flaps", gear up, flaps 1, flaps 0 |
 | Landing | below 100 ft RA | callouts: spoilers, reverse green, decel, seventy knots | |
-| After landing | ground spoilers disarmed, below 30 kt, turned off the runway | flaps 0, strobe AUTO, landing lights OFF, nose light TAXI, TCAS and XPDR STBY, FD, LS and ND overlays OFF, APU start | "Taxi lights off": nose, runway turnoff (and taxi camera) and wing lights OFF |
-| Parking | parking brake set after "taxi lights off" (or engines off) | APU bleed ON once the APU is available | PARKING C/L once the engines are off |
+| After landing | ground spoilers disarmed, below 30 kt, turned off the runway | flaps 0, strobe AUTO, landing lights OFF, nose light TAXI, TCAS STBY, XPDR STBY (SSR policy IVAO), FD, LS and ND overlays OFF, APU start | "Taxi lights off": nose, runway turnoff (and taxi camera) and wing lights OFF |
+| Parking | parking brake set after "taxi lights off" (or engines off) | APU bleed ON once the APU is available; once the engines are shut down (off or shutting down): anti ice and fuel pumps OFF, XPDR STBY (SSR policy VATSIM) | PARKING C/L once the engines are shut down |
 | Securing | PARKING C/L | | SECURING THE AIRCRAFT C/L, then the flight ends |
+
+On the A380 FCU the baro knob is pushed for STD and pulled for QNH (unlike the A320). The SSR policy (flyPad setting)
+selects when the transponder is set to AUTO and to STBY: VATSIM (before start / parking) or IVAO (line-up / after
+landing).
 
 Only the checklists of the ECL are read. Items whose ECL response ends with "(BOTH)" are answered by the PF, then by
 the PM with the same words once verified. The items of the ECAM memo (T.O and LDG) are read as one item: "ECAM memo"

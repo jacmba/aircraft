@@ -23,8 +23,9 @@ You drive the crew with **two buttons** of your controller and with the **Crew p
 - [1. Getting started](#1-getting-started)
   - [1.1 Enable the virtual crew](#11-enable-the-virtual-crew)
   - [1.2 Select the voices](#12-select-the-voices)
-  - [1.3 Bind the buttons](#13-bind-the-buttons)
-  - [1.4 Test the cockpit controls](#14-test-the-cockpit-controls)
+  - [1.3 Select the SSR policy](#13-select-the-ssr-policy)
+  - [1.4 Bind the buttons](#14-bind-the-buttons)
+  - [1.5 Test the cockpit controls](#15-test-the-cockpit-controls)
 - [2. The buttons](#2-the-buttons)
 - [3. The Crew page](#3-the-crew-page)
 - [4. Flying a complete flight](#4-flying-a-complete-flight)
@@ -65,7 +66,16 @@ officer does nothing.
 Select a **Male** or **Female** voice for the captain (your voice) and for the first officer. By default the captain
 is male and the first officer is female, so the two can be told apart.
 
-### 1.3 Bind the buttons
+### 1.3 Select the SSR policy
+
+The **SSR policy (transponder)** follows the rules of the online network you fly on:
+
+| Policy | Transponder AUTO | Transponder STBY |
+|--------|------------------|------------------|
+| **VATSIM** (default) | before start flow, once the beacon is ON | after the engine shutdown, at the parking |
+| **IVAO** | line-up flow, at the holding point | after landing flow, once the runway is vacated |
+
+### 1.4 Bind the buttons
 
 The virtual crew listens to two sim events that have no function in the A380X. Select one for each button:
 
@@ -86,7 +96,7 @@ The virtual crew listens to two sim events that have no function in the A380X. S
 > Choose buttons you can reach without looking, on the throttle or the sidestick: you will use the primary button
 > for every checklist response and every order, including during the takeoff roll and the approach.
 
-### 1.4 Test the cockpit controls
+### 1.5 Test the cockpit controls
 
 The grid **Test the cockpit controls of the first officer** operates, one by one, every control the first officer
 uses in the flows (strobe, landing and nose lights, runway turnoff lights, transponder, TCAS, seat belts, ground
@@ -132,20 +142,20 @@ only need to fly and press the primary button when the Crew page proposes someth
 |--------------------------|-----------------------------------------------------|------------------------------------------------------------|------------------------------------------|
 | Preflight                | *Start preflight* on the Crew page                   | preflight workflows at their scheduled time                 | COCKPIT PREPARATION C/L                  |
 | Takeoff briefing         | *Skip to takeoff briefing*                           |                                                            |                                          |
-| Before pushback or start | end of the preflight, or the briefing performed     | transponder AUTO (after the C/L, beacon ON)                 | BEFORE START C/L                         |
+| Before pushback or start | end of the preflight, or the briefing performed     | transponder AUTO (VATSIM; after the C/L, beacon ON)         | BEFORE START C/L                         |
 | Engine start             | engine mode selector IGN START                      | engine start callouts                                      |                                          |
-| After start              | engine mode selector back to NORM                   | ground spoilers ARM, flaps as briefed, autobrake RTO       | AFTER START C/L, flight control check    |
+| After start              | engine mode selector back to NORM                   | ground spoilers ARM, flaps as briefed, autobrake RTO, THS  | AFTER START C/L, flight control check    |
 | Taxi                     | parking brake released and moving                   |                                                            | brake check, TAXI C/L, line-up flow      |
 | Before takeoff           | line-up flow requested at the holding point          | line-up flow                                               | LINE-UP C/L, announce takeoff            |
 | Takeoff                  | takeoff announced (or takeoff roll detected)        | takeoff callouts                                           | gear up, flaps 1, flaps 0                |
 | After takeoff            | flaps retracted                                     | after takeoff flow                                         |                                          |
-| Climb, Cruise            | after takeoff flow done, then FMGC phase            | lights at 10000 ft, transition, "one thousand to go"       |                                          |
+| Climb, Cruise            | after takeoff flow done, then FMGC phase or ALT CRZ | lights at 10000 ft, transition, "one thousand to go"       |                                          |
 | Descent preparation      | approach briefing performed                         | autobrake as briefed                                       |                                          |
 | Descent, Approach        | FMGC phase                                          | transition, lights and PA at 10000 ft, approach callouts   | APPROACH C/L, flaps, gear, LANDING C/L   |
 | Landing                  | touchdown (or below 100 ft RA in approach)          | landing callouts                                           |                                          |
 | Go-around                | FMGC go-around phase                                | "Positive climb"                                           | go-around flaps, gear up, flaps          |
 | After landing            | runway vacated                                      | after landing flow, APU start                              | "Taxi lights off"                        |
-| Parking                  | parking brake set after "taxi lights off"           | APU bleed ON once the APU is available                     | PARKING C/L (engines off)                |
+| Parking                  | parking brake set after "taxi lights off"           | APU bleed ON, after shutdown: anti ice and fuel pumps OFF  | PARKING C/L (engines off)                |
 | Securing the aircraft    | PARKING C/L completed                               |                                                            | SECURING THE AIRCRAFT C/L                |
 
 ### 4.1 Preflight
@@ -197,14 +207,16 @@ The briefing data is also used by the first officer: takeoff flaps (after start 
    When the doors are closed and you are ready, press the primary button: **BEFORE START** checklist. Respond to each
    item with the primary button (see [5. Checklists](#5-checklists)).
 2. Once the checklist is completed and the beacon is ON, the first officer sets the **transponder to AUTO** (before
-   start flow).
+   start flow, with the SSR policy VATSIM).
 3. Start the engines yourself (engine mode selector IGN START, engine masters). The first officer calls each start:
    "Engine *n* start valve open", "Fuel flow", "Engine *n* stable".
 
 ### 4.4 After start and flight control check
 
 When the engine mode selector returns to NORM, the first officer performs the **after start flow**: ground spoilers
-ARM, flaps to the briefed takeoff setting, autobrake RTO.
+ARM, flaps to the briefed takeoff setting, autobrake RTO, and the **pitch trim**: the first officer checks the THS
+and, if it differs from the takeoff THS of the FMS (computed from the THS FOR of the PERF TO page), moves the pitch
+trim switch to set it.
 
 1. Primary button: **AFTER START** checklist (ANTI ICE is checked against your briefing).
 2. Primary button: **Flight control check**. You say "Flight control check". Move the sidestick and the rudder pedals
@@ -228,7 +240,7 @@ When you release the parking brake and start moving, the phase becomes **Taxi**.
 ### 4.6 Before takeoff and line-up
 
 At the holding point, press the primary button (**Line-up flow (holding point)**). The first officer performs the
-**line-up flow**: strobe ON, nose light T.O, TCAS TA/RA, double cycle of the seat belts signs and "Cabin crew, seats
+**line-up flow**: strobe ON, nose light T.O, transponder AUTO (SSR policy IVAO), TCAS TA/RA, double cycle of the seat belts signs and "Cabin crew, seats
 for takeoff". The phase becomes **Before takeoff**.
 
 ![The first officer busy with the line-up flow](images/line-up.png)
@@ -261,10 +273,12 @@ runway turnoff lights OFF.
 ### 4.8 Climb and cruise
 
 - Crossing the **transition altitude** of the FMS, the first officer calls **"Transition"**. Set your altimeter to
-  STD (pull the baro knob): you call **"Altimeter standard"** as soon as it is on STD (right away if it already was),
+  STD (push the baro knob, on the A380 it is pushed for STD and pulled for QNH): you call **"Altimeter standard"** as soon as it is on STD (right away if it already was),
   the first officer sets their own altimeter to STD and replies "Altimeter standard".
 - Passing **10000 ft** in climb, the first officer turns the landing lights OFF, and the wing lights OFF if on.
 - **"One thousand to go"** is called 1000 ft before the altitude selected on the FCU, in climb and descent.
+- The phase becomes **Cruise** when the FMGC enters the cruise, or as soon as the FMA shows **ALT CRZ** or **ALT
+  CRZ\*** (e.g. a short flight at a low cruise altitude).
 - Nothing else is needed in cruise until the approach briefing.
 
 ### 4.9 Approach briefing and descent
@@ -276,7 +290,7 @@ questions"). The phase becomes **Descent preparation** and the first officer set
 ![The approach briefing card in cruise, with a selection list open](images/briefing-dropdown.png)
 
 Crossing the **transition level** of the FMS, the first officer calls **"Transition"**. Set your altimeter to the QNH
-of the APPR PERF page of the FMS: you announce the QNH (e.g. **"QNH one zero one three"**, or "QNH two niner niner
+of the APPR PERF page of the FMS (pull the baro knob): you announce the QNH (e.g. **"QNH one zero one three"**, or "QNH two niner niner
 two" in inches) as soon as it is set to that value (any QNH if none is entered in the FMS), the first officer sets
 their own altimeter and replies with the same QNH.
 
@@ -308,7 +322,7 @@ after a takeoff. The landing checklist will be read again on the next approach.
 
 When the ground spoilers are disarmed, the speed is below 30 kt and you have turned off the runway (more than 15°),
 the phase becomes **After landing** and the first officer performs the **after landing flow**: flaps 0, strobe AUTO,
-landing lights OFF, nose light TAXI, TCAS and transponder STBY, flight directors, LS and ND overlays OFF, **APU
+landing lights OFF, nose light TAXI, TCAS STBY, transponder STBY (SSR policy IVAO), flight directors, LS and ND overlays OFF, **APU
 start**.
 
 ![After landing, the primary button calls "Taxi lights off"](images/after-landing.png)
@@ -317,7 +331,8 @@ start**.
    turnoff (with the taxi camera) and wing lights OFF.
 2. Set the parking brake: the phase becomes **Parking**. Once the APU is available, the first officer turns the **APU
    bleed ON**.
-3. Shut the engines down, then primary button: **PARKING** checklist.
+3. Shut the engines down: the first officer turns the engine and wing anti ice OFF (if on), the **fuel pumps OFF** and
+   the transponder to STBY (SSR policy VATSIM). Then primary button: **PARKING** checklist.
 4. Primary button: **SECURING THE AIRCRAFT** checklist. The flight ends and the Crew page is ready for a new
    flight.
 

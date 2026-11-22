@@ -14,6 +14,7 @@ import {
   VirtualCrewCommandParamLocalVar,
   VirtualCrewDefaults,
   VirtualCrewSettingKeys,
+  VirtualCrewSsrPolicies,
   VirtualCrewTestActions,
   VirtualCrewVoices,
   VirtualCrewVoiceSetting,
@@ -69,6 +70,10 @@ export const VirtualCrewPage: React.FC = () => {
     VirtualCrewSettingKeys.SecondaryButtonEvent,
     VirtualCrewDefaults.secondaryButtonEvent,
   );
+  const [ssrPolicy, setSsrPolicy] = usePersistentProperty(
+    VirtualCrewSettingKeys.SsrPolicy,
+    VirtualCrewDefaults.ssrPolicy,
+  );
   const [, setPrimaryButton] = useSimVar(VirtualCrewButtonLocalVars.Primary, 'number');
   const [, setSecondaryButton] = useSimVar(VirtualCrewButtonLocalVars.Secondary, 'number');
   const [, setCommandParam] = useSimVar(VirtualCrewCommandParamLocalVar, 'number');
@@ -94,6 +99,16 @@ export const VirtualCrewPage: React.FC = () => {
 
       <SettingItem name="First officer voice" disabled={!isEnabled}>
         <VoiceSelect value={firstOfficerVoice} onChange={setFirstOfficerVoice} />
+      </SettingItem>
+
+      <SettingItem name="SSR policy (transponder)" disabled={!isEnabled}>
+        <SelectGroup>
+          {VirtualCrewSsrPolicies.map((policy) => (
+            <SelectItem key={policy} onSelect={() => setSsrPolicy(policy)} selected={ssrPolicy === policy}>
+              {policy}
+            </SelectItem>
+          ))}
+        </SelectGroup>
       </SettingItem>
 
       <SettingItem name="Primary button (sim event)" disabled={!isEnabled}>
@@ -163,6 +178,10 @@ export const VirtualCrewPage: React.FC = () => {
           requests the available checklist, starts the line-up flow at the holding point, or gives the next order of the
           pilot flying (e.g. "Takeoff", "Gear up", "Flaps one", "Gear down", "Go around, flaps"). Secondary button:
           stops the checklist being read, "Stop" during the takeoff roll before V1, otherwise skips the pending order.
+        </p>
+        <p className="mt-2">
+          SSR policy: VATSIM, the first officer sets the transponder to AUTO before the start and to STBY at the
+          parking. IVAO, to AUTO at the line-up and to STBY after landing.
         </p>
       </div>
     </SettingsPage>

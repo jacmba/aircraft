@@ -23,6 +23,7 @@ import {
   VirtualCrewNextActions,
   VirtualCrewPerformedBriefingKeys,
   VirtualCrewSettingKeys,
+  VirtualCrewSsrPolicy,
   VirtualCrewStatusLocalVars,
   VirtualCrewVoices,
   VirtualCrewWorkflows,
@@ -31,12 +32,14 @@ import {
   AircraftSnapshot,
   BaroSnapshot,
   CrewAction,
+  CrewReadVars,
   CrewRole,
   CrewSeat,
   CrewSpeech,
   CrewVoice,
 } from './VirtualCrewTypes';
 import { VoicePlayer } from './VoicePlayer';
+import PitchTrimUtils from '../../../shared/src/PitchTrimUtils';
 import { EclState, EcpButton } from './checklists/ChecklistRunner';
 import { CoreContext, CoreOutput, VirtualCrewCore } from './VirtualCrewCore';
 import {
@@ -85,6 +88,12 @@ const FLAPS_LEVER_STEP_DELAY_MS = 400;
 /** Deviation of one dot of the localizer and of the glideslope, in degrees (as displayed on the PFD) */
 const LOCALIZER_DOT_DEG = 0.8;
 const GLIDESLOPE_DOT_DEG = 0.4;
+
+/** The pitch trim is moved until the THS is this close to the target, in degrees */
+const PITCH_TRIM_TOLERANCE_DEG = 0.1;
+
+/** The pitch trim switch is released after this time if the THS does not reach the target (e.g. no hydraulics) */
+const PITCH_TRIM_TIMEOUT_MS = 30000;
 
 /** Hectopascals in one inch of mercury */
 const HPA_PER_INHG = 33.8639;
@@ -138,6 +147,13 @@ export class VirtualCrew implements Instrument {
 
   private secondaryButtonEvent: string = VirtualCrewDefaults.secondaryButtonEvent;
 
+  private ssrPolicy: VirtualCrewSsrPolicy = VirtualCrewDefaults.ssrPolicy;
+
+  private keyEventManager: KeyEventManager | undefined;
+
+  /** THS position the pitch trim switch is moved to, and until when, undefined if not trimming */
+  private pitchTrimTarget: { degrees: number; until: number } | undefined;
+
   /** Briefing data as performed, read when the briefings are performed or the flows need them */
   private readonly briefings: Record<'takeoff' | 'approach', BriefingValues> = { takeoff: {}, approach: {} };
 
@@ -175,6 +191,11 @@ export class VirtualCrew implements Instrument {
       VirtualCrewDefaults.secondaryButtonEvent,
     );
     NXDataStore.getAndSubscribeLegacy(
+      VirtualCrewSettingKeys.SsrPolicy,
+      (_, value) => (this.ssrPolicy = value === 'IVAO' ? 'IVAO' : 'VATSIM'),
+      VirtualCrewDefaults.ssrPolicy,
+    );
+    NXDataStore.getAndSubscribeLegacy(
       VirtualCrewPerformedBriefingKeys.Takeoff,
       (_, value) => (this.briefings.takeoff = parseBriefingValues(value)),
       '{}',
@@ -187,6 +208,7 @@ export class VirtualCrew implements Instrument {
 
     // the events have no function in the A380X, they are always intercepted and only used if selected
     KeyEventManager.getManager(this.bus).then((manager) => {
+      this.keyEventManager = manager;
       VirtualCrewButtonEvents.forEach((event) => manager.interceptKey(event, false));
     });
     this.bus
@@ -240,6 +262,7 @@ export class VirtualCrew implements Instrument {
     }
 
     this.execute(this.core.update(context));
+    this.updatePitchTrim(now);
     this.publishStatus(context.aircraft);
   }
 
@@ -370,6 +393,12 @@ export class VirtualCrew implements Instrument {
         return parseAutobrake(this.briefings.approach.A380X_VCREW_APPR_AUTOBRAKE);
       case BriefingVars.LandingFlaps:
         return parseLandingFlaps(this.briefings.approach.A380X_VCREW_APPR_LDG_FLAPS);
+      case CrewReadVars.SsrPolicyIvao:
+        return this.ssrPolicy === 'IVAO' ? 1 : 0;
+      case CrewReadVars.TakeoffThs:
+        return VirtualCrew.takeoffThs();
+      case CrewReadVars.ThsPosition:
+        return SimVar.GetSimVarValue('ELEVATOR TRIM POSITION', SimVarValueType.Degree);
       default:
         return SimVar.GetSimVarValue(name, SimVarValueType.Number);
     }
@@ -390,7 +419,15 @@ export class VirtualCrew implements Instrument {
         VirtualCrew.pulse(action.name);
         break;
       case 'KEY_EVENT':
-        SimVar.SetSimVarValue(`K:${action.name}`, SimVarValueType.Number, action.value ?? 0);
+        if (action.value2 !== undefined) {
+          // events with two parameters cannot be sent through the K: variables
+          this.keyEventManager?.triggerKey(action.name, true, action.value ?? 0, action.value2);
+        } else {
+          SimVar.SetSimVarValue(`K:${action.name}`, SimVarValueType.Number, action.value ?? 0);
+        }
+        break;
+      case 'PITCH_TRIM':
+        this.pitchTrimTarget = { degrees: action.degrees, until: Date.now() + PITCH_TRIM_TIMEOUT_MS };
         break;
       case 'BUS_EVENT':
         this.bus.getPublisher<Record<string, boolean | number>>().pub(action.topic, action.value, true);
@@ -434,6 +471,54 @@ export class VirtualCrew implements Instrument {
 
   private static toVoice(value: string | undefined, fallback: CrewVoice): CrewVoice {
     return (VirtualCrewVoices as readonly string[]).includes(value ?? '') ? (value as CrewVoice) : fallback;
+  }
+
+  /**
+   * Takeoff THS of the FMS: the PERF TO page gives the CG for the takeoff (THS FOR), the THS is computed like the FWS
+   * does to check it
+   * @returns the THS in degrees, NaN if not available
+   */
+  private static takeoffThs(): number {
+    const fm1 = Arinc429Word.fromSimVarValue('L:A32NX_FM1_TO_PITCH_TRIM');
+    const fm2 = Arinc429Word.fromSimVarValue('L:A32NX_FM2_TO_PITCH_TRIM');
+    const word = !fm1.isNormalOperation() && fm2.isNormalOperation() ? fm2 : fm1;
+    return word.isNormalOperation() ? PitchTrimUtils.cgToPitchTrim(word.value) : NaN;
+  }
+
+  /**
+   * Holds the pitch trim switch in the direction of the target THS, like the pilot does on the pedestal: the switch is
+   * held as long as the events are repeated
+   * @param now the current time in milliseconds
+   */
+  private updatePitchTrim(now: number): void {
+    const target = this.pitchTrimTarget;
+    if (target === undefined) {
+      return;
+    }
+    const error = target.degrees - SimVar.GetSimVarValue('ELEVATOR TRIM POSITION', SimVarValueType.Degree);
+    if (Math.abs(error) < PITCH_TRIM_TOLERANCE_DEG || now > target.until) {
+      this.pitchTrimTarget = undefined;
+      return;
+    }
+    SimVar.SetSimVarValue(error > 0 ? 'K:ELEV_TRIM_UP' : 'K:ELEV_TRIM_DN', SimVarValueType.Number, 0);
+  }
+
+  /**
+   * True if ALT CRZ or ALT CRZ* is shown on the FMA (FG discrete word 3 of the PRIMs, as for the FMA)
+   * @returns true if the cruise altitude is held or being captured
+   */
+  private static altCruiseMode(): boolean {
+    const word = [1, 2, 3]
+      .map((prim) => Arinc429Word.fromSimVarValue(`L:A32NX_PRIM_${prim}_FG_DISCRETE_WORD_3`))
+      .find((w) => w.isNormalOperation());
+    if (word === undefined) {
+      return false;
+    }
+    const altHold = word.bitValueOr(20, false);
+    const altCapture = word.bitValueOr(19, false);
+    const altConstraint = word.bitValueOr(28, false);
+    const altIsCruiseAltitude = word.bitValueOr(29, false);
+    return (altHold || altCapture) && !altConstraint && altIsCruiseAltitude;
   }
 
   /**
@@ -501,6 +586,7 @@ export class VirtualCrew implements Instrument {
       vfeNext: get('L:A32NX_SPEEDS_VFEN'),
       vapp: get('L:A32NX_SPEEDS_VAPP'),
       fcuAltitude: get('L:A32NX_FCU_AFS_DISPLAY_ALT_VALUE'),
+      altCruiseMode: VirtualCrew.altCruiseMode(),
       localizerDots: locValid ? get('L:A32NX_RADIO_RECEIVER_LOC_DEVIATION') / LOCALIZER_DOT_DEG : undefined,
       glideslopeDots: gsValid ? get('L:A32NX_RADIO_RECEIVER_GS_DEVIATION') / GLIDESLOPE_DOT_DEG : undefined,
       transitionAltitude: VirtualCrew.arincValue('L:A32NX_FM1_TRANS_ALT'),

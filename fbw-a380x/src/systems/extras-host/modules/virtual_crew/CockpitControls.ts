@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: GPL-3.0
 
 import { VirtualCrewTestActionId } from '../../../shared/src/VirtualCrew';
-import { CrewAction } from './VirtualCrewTypes';
+import { CrewAction, SimVarReader } from './VirtualCrewTypes';
 
 /*
  * Cockpit controls operated by the virtual crew. The actions are those of the aircraft presets of the flyPad
@@ -34,10 +34,45 @@ export const AUTOBRAKE_ARMED_MODE_RTO = 6;
 /** Alert level of the TCAS (mfd_tcas_alert_level) */
 const TCAS_ALERT_LEVEL = { STBY: 0, TA: 1, TARA: 2 } as const;
 
+/**
+ * Electrical circuits of the fuel pumps (aircraft presets): feed tanks 1 to 4 main and standby (2, 3, 64 to 69), outer,
+ * mid and inner tanks (70 to 79), trim tank (80, 81)
+ */
+const FUEL_PUMP_CIRCUITS = [2, 3, 64, 65, 66, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81];
+
 export const CockpitControls = {
   /**
-   * Barometric reference of one side of the FCU: pulled for STD, pushed for QNH and set to the value (the value is
-   * sent in sixteenths of hectopascal, like KOHLSMAN_SET)
+   * Fuel pumps of the tanks (feed, outer, mid and inner tanks, trim tank), as in the presets of the flyPad: each pump is
+   * an electrical circuit connected to its bus
+   * @param on true to switch the pumps on
+   * @param read reads the state of the circuits, only the pumps in the other position are switched
+   */
+  fuelPumps: (on: boolean, read: SimVarReader): CrewAction[] =>
+    FUEL_PUMP_CIRCUITS.filter((circuit) => (read(`A:CIRCUIT CONNECTION ON:${circuit}`) === 1) !== on).map(
+      (circuit) => ({
+        type: 'KEY_EVENT',
+        name: 'ELECTRICAL_BUS_TO_CIRCUIT_CONNECTION_TOGGLE',
+        value: circuit,
+        value2: 1,
+      }),
+    ),
+
+  /** Engine anti ice of an engine, toggled if not in the requested position */
+  engineAntiIce: (engine: number, on: boolean, read: SimVarReader): CrewAction[] =>
+    (read(`A:ENG ANTI ICE:${engine}`) === 1) !== on
+      ? [{ type: 'KEY_EVENT', name: `ANTI_ICE_TOGGLE_ENG${engine}` }]
+      : [],
+
+  /** Wing anti ice, toggled if not in the requested position */
+  wingAntiIce: (on: boolean, read: SimVarReader): CrewAction[] =>
+    (read('A:STRUCTURAL DEICE SWITCH') === 1) !== on ? [{ type: 'KEY_EVENT', name: 'TOGGLE_STRUCTURAL_DEICE' }] : [],
+
+  /** Pitch trim to the position, in degrees */
+  pitchTrim: (degrees: number): CrewAction[] => [{ type: 'PITCH_TRIM', degrees }],
+
+  /**
+   * Barometric reference of one side of the FCU: on the A380 the knob is pushed for STD and pulled for QNH (unlike
+   * the A320), then set to the value (sent in sixteenths of hectopascal, like KOHLSMAN_SET)
    * @param side the side of the FCU
    * @param std true for STD, false for QNH
    * @param hpa the QNH, in hectopascals
@@ -45,9 +80,9 @@ export const CockpitControls = {
    */
   baro: (side: 'L' | 'R', std: boolean, hpa: number, currentlyStd: boolean): CrewAction[] =>
     std
-      ? [{ type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_BARO_PULL` }]
+      ? [{ type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_BARO_PUSH` }]
       : [
-          ...(currentlyStd ? [{ type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_BARO_PUSH` } as const] : []),
+          ...(currentlyStd ? [{ type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_BARO_PULL` } as const] : []),
           { type: 'KEY_EVENT', name: `A32NX.FCU_EFIS_${side}_BARO_SET`, value: Math.round(hpa * 16) },
         ],
   strobe: (position: keyof typeof STROBE_POSITIONS): CrewAction[] => [

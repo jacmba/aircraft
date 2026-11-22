@@ -64,7 +64,7 @@ describe('virtual crew transition callouts', () => {
 
     update(VirtualCrewFlightPhase.Climb, pfBaro(STD));
     expect(speech).toEqual(['PM:transition', 'PF:altimeterStandard']);
-    expect(actions).toEqual([{ type: 'KEY_EVENT', name: 'A32NX.FCU_EFIS_R_BARO_PULL' }]);
+    expect(actions).toEqual([{ type: 'KEY_EVENT', name: 'A32NX.FCU_EFIS_R_BARO_PUSH' }]);
 
     // the reply once the altimeter of the pilot monitoring is on STD
     update(VirtualCrewFlightPhase.Climb, pmBaro(STD));
@@ -95,7 +95,8 @@ describe('virtual crew transition callouts', () => {
     update(VirtualCrewFlightPhase.Descent, pfBaro(qnh(1008)));
     expect(speech).toEqual(['PM:transition', 'PF:qnh', 'PF:numOne', 'PF:numZero', 'PF:numZero', 'PF:numEight']);
     expect(actions).toEqual([
-      { type: 'KEY_EVENT', name: 'A32NX.FCU_EFIS_R_BARO_PUSH' },
+      // on the A380 the baro knob is pulled for QNH
+      { type: 'KEY_EVENT', name: 'A32NX.FCU_EFIS_R_BARO_PULL' },
       { type: 'KEY_EVENT', name: 'A32NX.FCU_EFIS_R_BARO_SET', value: 1008 * 16 },
     ]);
 

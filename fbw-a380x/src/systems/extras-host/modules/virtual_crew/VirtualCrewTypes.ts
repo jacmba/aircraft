@@ -27,14 +27,40 @@ export type CrewAction =
   | { type: 'SET_LOCAL_VAR'; name: string; value: number }
   /** Presses a momentary pushbutton: the local variable is set to 1, then back to 0 */
   | { type: 'PULSE_LOCAL_VAR'; name: string }
-  /** Triggers a simulator or aircraft event, e.g. 'A32NX.FCU_FD_PUSH' (without the K: prefix) */
-  | { type: 'KEY_EVENT'; name: string; value?: number }
+  /**
+   * Triggers a simulator or aircraft event, e.g. 'A32NX.FCU_FD_PUSH' (without the K: prefix), with a second parameter
+   * for the events which need it (e.g. ELECTRICAL_BUS_TO_CIRCUIT_CONNECTION_TOGGLE)
+   */
+  | { type: 'KEY_EVENT'; name: string; value?: number; value2?: number }
+  /** Moves the pitch trim switch until the THS reaches the position, in degrees (nose up positive) */
+  | { type: 'PITCH_TRIM'; degrees: number }
   /** Publishes an event on the synced event bus, e.g. a setting of the MFD SURV page */
   | { type: 'BUS_EVENT'; topic: string; value: boolean | number }
   /** Sets the seat belts signs, only toggled if not in the requested position */
   | { type: 'SEAT_BELTS'; on: boolean }
   /** Sets the wing lights, only toggled if not in the requested position */
   | { type: 'WING_LIGHTS'; on: boolean };
+
+/**
+ * Values read like simulator variables which the integration module computes: settings of the flyPad and values which
+ * need a conversion
+ */
+export const CrewReadVars = {
+  /** 1 if the transponder policy is the one of IVAO (AUTO at the line-up, STBY after landing), 0 for VATSIM */
+  SsrPolicyIvao: 'VCREW:SSR_POLICY_IVAO',
+  /** Takeoff THS of the FMS (from the THS FOR of the PERF TO page), in degrees, NaN if not available */
+  TakeoffThs: 'VCREW:TAKEOFF_THS',
+  /** Position of the THS, in degrees (nose up positive) */
+  ThsPosition: 'VCREW:THS_POSITION',
+} as const;
+
+/**
+ * An engine shut down by the crew: off, or shutting down (engine master off). The engine stays in the shutting down
+ * state until the EGT has cooled down to the ambient temperature, which takes several minutes.
+ * @param engine the engine
+ * @returns true if the engine is shut down
+ */
+export const isEngineShutDown = (engine: EngineSnapshot): boolean => engine.state === 0 || engine.state === 4;
 
 /** Reads a simulator variable, e.g. 'L:A32NX_EXT_PWR_AVAIL:1' */
 export type SimVarReader = (name: string) => number;
@@ -135,6 +161,8 @@ export interface AircraftSnapshot {
   vfeNext?: number;
   /** Approach speed of the FMS, 0 if not available */
   vapp?: number;
+  /** ALT CRZ or ALT CRZ* on the FMA: the cruise altitude is held or being captured */
+  altCruiseMode?: boolean;
   /** Altitude selected on the FCU */
   fcuAltitude?: number;
   /** Localizer received, deviation in dots (undefined if not received) */
